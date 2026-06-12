@@ -1,0 +1,26 @@
+import { contextBridge, ipcRenderer } from 'electron';
+
+// 安全地把有限的 IPC 能力暴露給 Vue 畫面 (window.api)
+contextBridge.exposeInMainWorld('api', {
+  // --- 控制台用 ---
+  pickImage: () => ipcRenderer.invoke('pick-image'),
+  listMaps: () => ipcRenderer.invoke('list-maps'),
+  selectMap: (path) => ipcRenderer.send('select-map', path),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  setOpacity: (v) => ipcRenderer.send('set-opacity', v),
+  setScale: (v) => ipcRenderer.send('set-scale', v),
+  setClickThrough: (v) => ipcRenderer.send('set-click-through', v),
+  setOnlyDbd: (v) => ipcRenderer.send('set-only-dbd', v),
+  resetPosition: () => ipcRenderer.send('reset-position'),
+  quit: () => ipcRenderer.send('quit-app'),
+  onSettings: (cb) => ipcRenderer.on('settings', (_e, s) => cb(s)),
+  onOcrResult: (cb) => ipcRenderer.on('ocr-result', (_e, r) => cb(r)),
+
+  // --- overlay 用 ---
+  onSetImage: (cb) => ipcRenderer.on('set-image', (_e, path) => cb(path)),
+  onShowHud: (cb) => ipcRenderer.on('show-hud', (_e, text) => cb(text)),
+  reportImageSize: (size) => ipcRenderer.send('image-natural-size', size),
+  dragStart: () => ipcRenderer.send('drag-start'),
+  dragMove: (dx, dy) => ipcRenderer.send('drag-move', { dx, dy }),
+  dragEnd: () => ipcRenderer.send('drag-end')
+});

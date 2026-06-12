@@ -1,0 +1,8 @@
+node_modules/
+out/
+release/
+dist/
+*.log
+
+# tesseract 執行時下載的語言檔(之後打包再正式處理)
+*.traineddata
