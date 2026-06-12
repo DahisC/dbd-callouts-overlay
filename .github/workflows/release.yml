@@ -1,0 +1,36 @@
+name: Release
+
+# 推上 v* 開頭的 tag 時自動打包並發佈草稿 release
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: windows-latest      # 有原生模組(uiohook-napi/active-win),必須用 Windows
+    permissions:
+      contents: write            # 允許建立 release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      # 把 tag 名稱(去掉開頭的 v)寫進 package.json 的 version
+      # 例如 tag v0.0.2 -> version 0.0.2,不另外建 commit/tag
+      - name: Set version from tag
+        shell: bash
+        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
+
+      - name: Build & publish (draft)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # CI 內建,免自己設 token
+        run: npm run release
