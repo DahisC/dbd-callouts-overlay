@@ -9,11 +9,13 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "start": "electron-vite preview",
-    "dist": "electron-vite build && electron-builder --win"
+    "dist": "electron-vite build && electron-builder --win",
+    "release": "electron-vite build && electron-builder --win --publish always"
   },
   "dependencies": {
     "@fontsource/noto-sans-tc": "^5.2.9",
     "active-win": "^8.2.1",
+    "electron-updater": "^6.8.9",
     "tesseract.js": "^7.0.0",
     "uiohook-napi": "^1.5.5",
     "vue": "^3.4.0"
@@ -27,12 +29,22 @@
   },
   "build": {
     "appId": "com.dbd.mapoverlay",
-    "productName": "DBD Map Overlay",
+    "productName": "DBD Callouts Overlay",
     "directories": {
       "output": "release"
     },
     "win": {
-      "target": "portable"
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "DahisC",
+      "repo": "dbd-callouts-overlay"
     },
     "files": [
       "out/**/*"

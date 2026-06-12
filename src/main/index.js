@@ -3,6 +3,8 @@ import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
 import activeWin from 'active-win';
 import { exec } from 'child_process';
+import updaterPkg from 'electron-updater';
+const { autoUpdater } = updaterPkg;
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
 import { join, extname, basename } from 'path';
@@ -278,6 +280,31 @@ ipcMain.handle('get-settings', () => settings);
 
 ipcMain.handle('get-version', () => app.getVersion());
 
+// ---- 自動更新 ----
+function sendUpdate(payload) {
+  if (controlWin && !controlWin.isDestroyed()) controlWin.webContents.send('update-status', payload);
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;          // 查到新版就自動下載
+  autoUpdater.autoInstallOnAppQuit = true;  // 關閉 app 時自動安裝
+  autoUpdater.on('checking-for-update', () => sendUpdate({ state: 'checking' }));
+  autoUpdater.on('update-available', (i) => sendUpdate({ state: 'available', version: i.version }));
+  autoUpdater.on('update-not-available', () => sendUpdate({ state: 'latest' }));
+  autoUpdater.on('download-progress', (p) => sendUpdate({ state: 'downloading', percent: Math.round(p.percent) }));
+  autoUpdater.on('update-downloaded', (i) => sendUpdate({ state: 'downloaded', version: i.version }));
+  autoUpdater.on('error', (e) => sendUpdate({ state: 'error', message: String((e && e.message) || e) }));
+}
+
+// 按鈕:檢查更新(開發模式沒有更新設定,回報 dev)
+ipcMain.on('check-update', () => {
+  if (!app.isPackaged) { sendUpdate({ state: 'dev' }); return; }
+  autoUpdater.checkForUpdates().catch((e) => sendUpdate({ state: 'error', message: String(e.message || e) }));
+});
+
+// 按鈕:立即重啟安裝
+ipcMain.on('install-update', () => autoUpdater.quitAndInstall());
+
 // 列出內建地圖
 ipcMain.handle('list-maps', () => listMaps());
 
@@ -483,6 +510,7 @@ app.whenReady().then(() => {
   createOverlayWindow();
   createControlWindow();
   startGameStatePoll();
+  setupAutoUpdater();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

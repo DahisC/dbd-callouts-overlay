@@ -11,6 +11,7 @@ const maps = ref([]);
 const selectedMap = ref('');
 const game = ref({ running: false, focused: false }); // 遊戲狀態
 const version = ref('');
+const update = ref(null);   // 更新狀態 { state, percent, version, message }
 
 // 目前地圖名稱(由選取/辨識的路徑推算)
 const currentMapName = computed(() => {
@@ -46,6 +47,29 @@ onMounted(async () => {
 window.api.onSettings(applySettings);
 window.api.onOcrResult((r) => { ocr.value = r; });
 window.api.onGameState((st) => { game.value = st; });
+window.api.onUpdateStatus((s) => { update.value = s; });
+
+// 更新狀態文字
+const updateText = computed(() => {
+  const u = update.value;
+  if (!u) return '';
+  switch (u.state) {
+    case 'checking': return '檢查更新中…';
+    case 'available': return `發現新版 v${u.version},下載中…`;
+    case 'downloading': return `下載中 ${u.percent}%`;
+    case 'downloaded': return `v${u.version} 已就緒`;
+    case 'latest': return '已是最新版本';
+    case 'dev': return '開發模式無法檢查更新';
+    case 'error': return '檢查失敗,請稍後再試';
+    default: return '';
+  }
+});
+
+function checkUpdate() {
+  update.value = { state: 'checking' };
+  window.api.checkUpdate();
+}
+function installUpdate() { window.api.installUpdate(); }
 
 const groupedMaps = computed(() => {
   const g = {};
@@ -130,6 +154,20 @@ function quit() { window.api.quit(); }
       <input class="slider" type="range" min="0.1" max="1" step="0.01"
              v-model="opacity" @input="onOpacity" :style="{ '--fill': opacityFill }" />
     </section>
+
+    <!-- 更新 -->
+    <div class="update">
+      <button
+        v-if="update && update.state === 'downloaded'"
+        class="upd-btn ready"
+        @click="installUpdate">重啟以安裝更新</button>
+      <button
+        v-else
+        class="upd-btn"
+        :disabled="update && (update.state === 'checking' || update.state === 'downloading')"
+        @click="checkUpdate">檢查更新</button>
+      <span v-if="updateText" class="upd-text" :class="update.state">{{ updateText }}</span>
+    </div>
 
     <footer class="credit">Designed by <b>Pocky</b><span v-if="version" class="ver">v{{ version }}</span></footer>
     </div>
@@ -310,6 +348,28 @@ html, body { margin: 0; background: var(--bg); overflow: hidden; }
 }
 .toggle input:checked + i { background: rgba(255, 255, 255, 0.9); }
 .toggle input:checked + i::after { transform: translateX(18px); background: #16171f; }
+
+/* ===== 更新 ===== */
+.update { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.upd-btn {
+  width: 100%;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 13px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.upd-btn:hover:not(:disabled) { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.16); }
+.upd-btn:disabled { opacity: 0.5; cursor: default; }
+.upd-btn.ready { background: #46d6a0; border-color: #46d6a0; color: #0d2a1f; font-weight: 700; }
+.upd-btn.ready:hover { background: #54e2ad; }
+.upd-text { font-size: 11px; color: var(--muted); }
+.upd-text.downloaded { color: #46d6a0; }
+.upd-text.error { color: #e0a23c; }
 
 /* ===== 作者署名 ===== */
 .credit {
