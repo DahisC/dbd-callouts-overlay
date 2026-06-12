@@ -1,6 +1,6 @@
 {
   "name": "dbd-callouts-overlay",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "DBD 桌面地圖 overlay - 把圖片釘在桌面左上角,可調透明度/大小 (Electron + Vue)",
   "main": "./out/main/index.js",
   "author": "",

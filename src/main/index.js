@@ -50,7 +50,7 @@ const settingsPath = () => join(app.getPath('userData'), 'settings.json');
 
 const DEFAULT_SETTINGS = {
   imagePath: '',      // 目前選取的圖片絕對路徑
-  opacity: 0.85,      // 0.1 ~ 1.0 整個 overlay 視窗的不透明度
+  opacity: 0.5,       // 0.1 ~ 1.0 整個 overlay 視窗的不透明度
   scale: 0.5,         // 相對於圖片原始尺寸的縮放比例
   x: 0,               // overlay 左上角位置
   y: 0,
@@ -189,6 +189,7 @@ function createControlWindow() {
     height: 200,
     useContentSize: true,   // 寬高指的是內容區,方便依內容貼合
     title: 'DBD Overlay 控制台',
+    frame: false,           // 無邊框,改用自訂標題列
     resizable: false,
     autoHideMenuBar: true,
     webPreferences: {
@@ -205,6 +206,11 @@ function createControlWindow() {
 
   controlWin.on('closed', () => { controlWin = null; });
 }
+
+// 自訂標題列:最小化
+ipcMain.on('control-minimize', () => {
+  if (controlWin && !controlWin.isDestroyed()) controlWin.minimize();
+});
 
 // 依控制台內容高度自動調整視窗高度(寬度不變)
 ipcMain.on('resize-control', (_e, height) => {
@@ -269,6 +275,8 @@ ipcMain.on('image-natural-size', (_e, size) => {
 });
 
 ipcMain.handle('get-settings', () => settings);
+
+ipcMain.handle('get-version', () => app.getVersion());
 
 // 列出內建地圖
 ipcMain.handle('list-maps', () => listMaps());
@@ -421,7 +429,7 @@ function showHud(text) {
 }
 
 function adjustScale(delta) {
-  settings.scale = clamp(+(settings.scale + delta).toFixed(3), 0.1, 2);
+  settings.scale = clamp(+(settings.scale + delta).toFixed(3), 0.1, 1);
   applyOverlayGeometry();
   showHud(`大小 ${Math.round(settings.scale * 100)}%`);
   notifyControl();
