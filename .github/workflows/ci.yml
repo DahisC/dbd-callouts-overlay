@@ -1,0 +1,29 @@
+name: CI
+
+# 開 PR 到 main、或 push 到 main 時,跑一次完整打包驗證(不發佈)
+# 綠燈代表 main 可以安全發版
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest      # 與 release 同環境(有原生模組)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci
+
+      # 跑與 release 相同的打包路徑,但不上傳(--publish never 由 dist 指令預設不帶)
+      - name: Build installer (no publish)
+        run: npm run dist
