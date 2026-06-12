@@ -12,6 +12,7 @@
     "dist": "electron-vite build && electron-builder --win"
   },
   "dependencies": {
+    "@fontsource/noto-sans-tc": "^5.2.9",
     "active-win": "^8.2.1",
     "tesseract.js": "^7.0.0",
     "uiohook-napi": "^1.5.5",

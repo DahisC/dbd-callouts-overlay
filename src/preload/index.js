@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('api', {
   quit: () => ipcRenderer.send('quit-app'),
   onSettings: (cb) => ipcRenderer.on('settings', (_e, s) => cb(s)),
   onOcrResult: (cb) => ipcRenderer.on('ocr-result', (_e, r) => cb(r)),
+  onGameState: (cb) => ipcRenderer.on('game-state', (_e, st) => cb(st)),
+  resizeControl: (height) => ipcRenderer.send('resize-control', height),
 
   // --- overlay 用 ---
   onSetImage: (cb) => ipcRenderer.on('set-image', (_e, path) => cb(path)),

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen } from 'el
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
 import activeWin from 'active-win';
+import { exec } from 'child_process';
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
 import { join, extname, basename } from 'path';
@@ -185,7 +186,8 @@ ipcMain.on('drag-end', () => {
 function createControlWindow() {
   controlWin = new BrowserWindow({
     width: 360,
-    height: 500,
+    height: 200,
+    useContentSize: true,   // 寬高指的是內容區,方便依內容貼合
     title: 'DBD Overlay 控制台',
     resizable: false,
     autoHideMenuBar: true,
@@ -203,6 +205,13 @@ function createControlWindow() {
 
   controlWin.on('closed', () => { controlWin = null; });
 }
+
+// 依控制台內容高度自動調整視窗高度(寬度不變)
+ipcMain.on('resize-control', (_e, height) => {
+  if (!controlWin || controlWin.isDestroyed()) return;
+  const [w] = controlWin.getContentSize();
+  controlWin.setContentSize(w, Math.max(80, Math.round(height)));
+});
 
 // ---- IPC: 控制台 -> 主程序 ----
 
@@ -293,6 +302,31 @@ async function isDbdForeground() {
     console.error('[FG] active-win failed, allow anyway:', e.message);
     return true; // 偵測失敗就保守放行,避免功能整個失效
   }
+}
+
+// 檢查 DBD 程序是否正在執行(不論前景與否)
+function isDbdRunning() {
+  return new Promise((resolve) => {
+    exec(
+      'tasklist /FI "IMAGENAME eq DeadByDaylight-Win64-Shipping.exe" /NH',
+      { windowsHide: true },
+      (err, stdout) => resolve(!err && /DeadByDaylight/i.test(stdout))
+    );
+  });
+}
+
+// 輪詢遊戲狀態,推給控制台:{ running, focused }
+let gameStateTimer = null;
+function startGameStatePoll() {
+  const tick = async () => {
+    const focused = await isDbdForeground();        // 前景就是 DBD
+    const running = focused ? true : await isDbdRunning();
+    if (controlWin && !controlWin.isDestroyed()) {
+      controlWin.webContents.send('game-state', { running, focused });
+    }
+  };
+  tick();
+  gameStateTimer = setInterval(tick, 2000);
 }
 
 // 帶 500ms 快取的前景判斷(按住方向鍵時避免每次都去查)
@@ -440,6 +474,7 @@ app.whenReady().then(() => {
   startKeyHook();
   createOverlayWindow();
   createControlWindow();
+  startGameStatePoll();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -451,6 +486,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   try { uIOhook.stop(); } catch {}
+  if (gameStateTimer) clearInterval(gameStateTimer);
   terminateWorker().catch(() => {});
 });
 
