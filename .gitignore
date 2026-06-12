@@ -6,3 +6,7 @@ dist/
 
 # tesseract 執行時下載的語言檔(之後打包再正式處理)
 *.traineddata
+
+# 字型子集化的中間產物(子集字檔已在 src/.../assets/,這些不需進版控)
+notosanstc-full.ttf
+glyphs.txt

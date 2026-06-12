@@ -6,7 +6,8 @@ export const NAME_REGION = { x: 0.26, y: 0.796, w: 0.48, h: 0.043 };
 let workerPromise = null;
 // 共用一個 OCR worker(第一次建立,之後重用)
 function getWorker() {
-  if (!workerPromise) workerPromise = createWorker('chi_tra');
+  // oem=1 (LSTM_ONLY):chi_tra 用 LSTM 引擎,非 LSTM 核心可從打包中排除
+  if (!workerPromise) workerPromise = createWorker('chi_tra', 1);
   return workerPromise;
 }
 

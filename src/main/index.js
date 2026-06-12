@@ -51,6 +51,7 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const settingsPath = () => join(app.getPath('userData'), 'settings.json');
 
 const DEFAULT_SETTINGS = {
+  enabled: true,      // 是否啟用 overlay 顯示
   imagePath: '',      // 目前選取的圖片絕對路徑
   opacity: 0.5,       // 0.1 ~ 1.0 整個 overlay 視窗的不透明度
   scale: 0.5,         // 相對於圖片原始尺寸的縮放比例
@@ -130,6 +131,17 @@ function applyClickThrough() {
   overlayWin.setIgnoreMouseEvents(settings.clickThrough, { forward: true });
 }
 
+// 依啟用狀態顯示 / 隱藏 overlay 視窗
+function applyEnabled() {
+  if (!overlayWin) return;
+  if (settings.enabled) {
+    overlayWin.showInactive(); // 顯示但不搶焦點
+    overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  } else {
+    overlayWin.hide();
+  }
+}
+
 function createOverlayWindow() {
   overlayWin = new BrowserWindow({
     x: settings.x,
@@ -157,6 +169,7 @@ function createOverlayWindow() {
   overlayWin.webContents.on('did-finish-load', () => {
     pushImage();
     applyClickThrough();
+    applyEnabled();
   });
 
 }
@@ -190,7 +203,7 @@ function createControlWindow() {
     width: 360,
     height: 200,
     useContentSize: true,   // 寬高指的是內容區,方便依內容貼合
-    title: 'DBD Overlay 控制台',
+    title: 'DBD Callouts Overlay',
     frame: false,           // 無邊框,改用自訂標題列
     resizable: false,
     autoHideMenuBar: true,
@@ -247,6 +260,12 @@ ipcMain.on('set-scale', (_e, v) => {
   settings.scale = v;
   applyOverlayGeometry();
   showHud(`大小 ${Math.round(v * 100)}%`);
+  saveSettings();
+});
+
+ipcMain.on('set-enabled', (_e, v) => {
+  settings.enabled = !!v;
+  applyEnabled();
   saveSettings();
 });
 
@@ -393,6 +412,7 @@ async function captureScreen() {
 
 async function onTabPressed() {
   if (capturing) return;       // 防止連按/長按重複觸發
+  if (!settings.enabled) return; // 停用時不偵測 / 不切換
   capturing = true;
   try {
     tabCount++;
