@@ -55,12 +55,12 @@ const updateText = computed(() => {
   if (!u) return '';
   switch (u.state) {
     case 'checking': return '檢查更新中…';
-    case 'available': return `發現新版 v${u.version},下載中…`;
+    case 'available': return `發現新版 v${u.version}，下載中…`;
     case 'downloading': return `下載中 ${u.percent}%`;
     case 'downloaded': return `v${u.version} 已就緒`;
     case 'latest': return '已是最新版本';
     case 'dev': return '開發模式無法檢查更新';
-    case 'error': return '檢查失敗,請稍後再試';
+    case 'error': return '檢查失敗，請稍後再試';
     default: return '';
   }
 });
@@ -169,7 +169,10 @@ function quit() { window.api.quit(); }
       <span v-if="updateText" class="upd-text" :class="update.state">{{ updateText }}</span>
     </div>
 
-    <footer class="credit">Designed by <b>Pocky</b><span v-if="version" class="ver">v{{ version }}</span></footer>
+    <footer class="credit">
+      <span>Designed by <b>Pocky</b></span>
+      <span v-if="version" class="ver">v{{ version }}</span>
+    </footer>
     </div>
   </div>
 </template>
@@ -350,7 +353,23 @@ html, body { margin: 0; background: var(--bg); overflow: hidden; }
 .toggle input:checked + i::after { transform: translateX(18px); background: #16171f; }
 
 /* ===== 更新 ===== */
-.update { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.update {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding-top: 16px;
+}
+.update::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
 .upd-btn {
   width: 100%;
   padding: 10px;
@@ -376,16 +395,11 @@ html, body { margin: 0; background: var(--bg); overflow: hidden; }
   margin-top: 2px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
+  justify-content: space-between;
   font-size: 10.5px;
   letter-spacing: 1px;
   color: #5c5d68;
 }
 .credit b { font-weight: 700; color: #9a9ba6; }
-.credit .ver {
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-  color: #6c6d78;
-}
+.credit .ver { color: #6c6d78; }
 </style>
