@@ -1,4 +1,4 @@
-name: CI
+name: Build Check
 
 # 開 PR 到 main、或 push 到 main 時,跑一次完整打包驗證(不發佈)
 # 綠燈代表 main 可以安全發版
