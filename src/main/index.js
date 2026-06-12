@@ -148,6 +148,7 @@ function createOverlayWindow() {
     y: settings.y,
     width: 400,
     height: 300,
+    show: settings.enabled,   // 停用狀態啟動時不顯示,避免地圖閃一下
     frame: false,
     transparent: true,
     resizable: false,

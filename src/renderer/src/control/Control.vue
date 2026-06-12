@@ -24,7 +24,7 @@ const currentMapName = computed(() => {
 
 // 依遊戲狀態給對應的顏色 / 標題 / 提示
 const status = computed(() => {
-  if (!enabled.value) return { key: 'off', title: '未啟用', hint: '開啟上方開關以啟用地圖覆蓋' };
+  if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
   if (!game.value.running) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
   if (!game.value.focused) return { key: 'warn', title: '已暫停', hint: '遊戲處於背景狀態時會自動暫停偵測\n請切換到遊戲視窗' };
   return { key: 'ok', title: '已就緒', hint: `按 Tab 開啟計分板以自動偵測地圖\n目前地圖：${currentMapName.value}` };
@@ -139,6 +139,10 @@ function quit() { window.api.quit(); }
           <rect x="5" y="5" width="4.5" height="14" rx="2.25" />
           <rect x="14.5" y="5" width="4.5" height="14" rx="2.25" />
         </svg>
+        <svg v-else-if="status.key === 'off'" class="ic ic-zzz" viewBox="0 0 24 24">
+          <path d="M6 12 H11 L6 17 H11" transform="rotate(-10 8.5 14.5)" />
+          <path d="M13 4 H21 L13 12 H21" transform="rotate(7 17 8)" />
+        </svg>
         <span v-else class="dot"></span>
       </div>
       <div class="dz-title">{{ status.title }}</div>
@@ -207,6 +211,12 @@ function quit() { window.api.quit(); }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); overflow: hidden; }
+/* 整個視窗禁止選取 / 複製文字 */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
 
 /* ===== 自訂標題列 ===== */
 .titlebar {
@@ -294,6 +304,14 @@ html, body { margin: 0; background: var(--bg); overflow: hidden; }
   filter: drop-shadow(0 0 8px rgba(var(--c), 0.6));
 }
 .dashed .ic-pause { fill: rgb(var(--c)); stroke: none; }
+
+/* 未啟用:兩個大小遞增、角度各異的 z(睡覺 Zzz) */
+.dashed .ic-zzz {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .dz-title {
   font-size: 15px;
