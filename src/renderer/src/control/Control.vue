@@ -13,6 +13,7 @@ const selectedMap = ref('');
 const game = ref({ running: false, focused: false }); // 遊戲狀態
 const version = ref('');
 const update = ref(null);   // 更新狀態 { state, percent, version, message }
+const isDev = import.meta.env.DEV;  // 開發模式(打包後為 false)
 
 // 目前地圖名稱(由選取/辨識的路徑推算)
 const currentMapName = computed(() => {
@@ -202,7 +203,8 @@ function quit() { window.api.quit(); }
 
     <footer class="credit">
       <span>Designed by <b>Pocky</b></span>
-      <span v-if="version" class="ver">v{{ version }}</span>
+      <span v-if="isDev" class="ver dev-tag">Develop</span>
+      <span v-else-if="version" class="ver">v{{ version }}</span>
     </footer>
     </div>
   </div>
@@ -488,4 +490,6 @@ body {
 }
 .credit b { font-weight: 700; color: #9a9ba6; }
 .credit .ver { color: #6c6d78; }
+/* 開發模式標記 */
+.credit .dev-tag { color: #e0a23c; font-weight: 700; letter-spacing: 0.5px; }
 </style>
