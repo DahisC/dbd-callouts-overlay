@@ -183,15 +183,15 @@ body {
   letter-spacing: 2px;
   color: var(--muted);
 }
-/* 版本號:緊貼標題右側 */
+/* 版本號:樣式同標題,只多一個與標題的間距 */
 .tb-ver {
   margin-left: 8px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
-  color: #5c5d68;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--muted);
 }
-.tb-ver.dev-tag { color: #e0a23c; font-weight: 700; }
+.tb-ver.dev-tag { color: #e0a23c; }
 /* 控制鈕推到最右 */
 .tb-controls { display: flex; height: 100%; margin-left: auto; -webkit-app-region: no-drag; }
 .tb-btn {
