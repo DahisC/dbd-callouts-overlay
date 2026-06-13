@@ -47,6 +47,14 @@ function saveSettings() {
   }
 }
 
+// 地圖清單快取:避免每次按 Tab 都同步重掃磁碟。
+// 使用者開控制台時(list-maps)才強制重掃,以撿到新放入的地圖。
+let mapsCache: MapItem[] | null = null;
+function getMaps(forceRefresh = false) {
+  if (forceRefresh || !mapsCache) mapsCache = listMaps();
+  return mapsCache;
+}
+
 const MIME = {
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif', '.bmp': 'image/bmp'
@@ -306,8 +314,8 @@ ipcMain.on('check-update', () => {
 // 按鈕:立即重啟安裝
 ipcMain.on('install-update', () => autoUpdater.quitAndInstall());
 
-// 列出內建地圖
-ipcMain.handle('list-maps', () => listMaps());
+// 列出內建地圖(使用者開控制台時強制重掃,撿到新放入的地圖)
+ipcMain.handle('list-maps', () => getMaps(true));
 
 // 從下拉選單選了某張內建地圖
 ipcMain.on('select-map', (_e, path) => {
@@ -422,7 +430,7 @@ async function onTabPressed() {
     await delay(CAPTURE_DELAY);
     const img = await captureScreen();
     const text = await recognizeMapName(img);
-    const best = matchMap(text, listMaps());
+    const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
     console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ` +
