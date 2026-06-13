@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron } from '@playwright/test';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -55,9 +55,12 @@ test('切「啟用」toggle 會寫進 settings.json', async () => {
     .toBe(false);
 });
 
-test('啟動後會寫入檔案日誌(electron-log)', async () => {
-  const logFile = join(userDataDir, 'logs', 'main.log');
+test('啟動後會寫入以日期命名的檔案日誌(electron-log)', async () => {
+  const logsDir = join(userDataDir, 'logs');
   await expect
-    .poll(() => existsSync(logFile), { message: 'logs/main.log 應被建立', timeout: 8_000 })
-    .toBe(true);
+    .poll(() => {
+      if (!existsSync(logsDir)) return 0;
+      return readdirSync(logsDir).filter((f) => /^\d{4}-\d{2}-\d{2}\.log$/.test(f)).length;
+    }, { message: 'logs/ 應有 YYYY-MM-DD.log', timeout: 8_000 })
+    .toBeGreaterThan(0);
 });

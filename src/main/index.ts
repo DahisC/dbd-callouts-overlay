@@ -9,9 +9,12 @@ const { autoUpdater } = updaterPkg;
 import log from 'electron-log/main';
 
 // 檔案日誌:把所有 console.* 接到 electron-log,同時寫進檔案與終端機。
-// 檔案位置:userData/logs/main.log(Windows: %AppData%\<app>\logs\),自動輪替。
+// 檔名用啟動當天的本地日期(YYYY-MM-DD.log),每天一個檔;位置在 userData/logs/。
 log.initialize();
 log.transports.file.level = 'info';
+const _d = new Date();
+const _pad = (n: number) => String(n).padStart(2, '0');
+log.transports.file.fileName = `${_d.getFullYear()}-${_pad(_d.getMonth() + 1)}-${_pad(_d.getDate())}.log`;
 Object.assign(console, log.functions);
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
