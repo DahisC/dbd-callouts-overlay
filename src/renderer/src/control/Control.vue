@@ -10,9 +10,9 @@ const isDev = import.meta.env.DEV;  // 開發模式(打包後為 false)
 
 // 外觀 / 行為設定(啟用、透明度、大小、滑鼠穿透、只在遊戲時顯示)
 const {
-  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused,
+  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug,
   opacityFill, scaleFill,
-  onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
+  onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused, onDebug
 } = useSettings();
 
 // 地圖清單與目前選取(下拉與 imagePath 連動)
@@ -136,10 +136,12 @@ function openLogs() { window.api.openLogs(); }
         @click="onUpdateClick">{{ updBtnText }}</button>
     </div>
 
-    <!-- 開啟日誌資料夾(回報問題時附 log 用)-->
-    <div class="logs-row">
-      <a class="link" @click="openLogs">開啟日誌資料夾</a>
-    </div>
+    <!-- 除錯模式:保留檔案日誌與每次截圖,關閉時清空。
+         「開啟資料夾」連結同一行,且不需開啟 toggle 即可點 -->
+    <label class="toggle dim">
+      <span>除錯模式 <a href="#" class="link" @click.prevent="openLogs">開啟資料夾</a></span>
+      <input type="checkbox" v-model="debug" @change="onDebug" /><i></i>
+    </label>
 
     <!-- 作者(左)與地圖 callout 來源(右),版本號移到標題列 -->
     <footer class="credit">
@@ -426,18 +428,17 @@ body {
 .upd-btn.error { color: #e0a23c; }
 .upd-btn.dev { color: var(--muted); }
 
-/* ===== 開啟日誌連結 ===== */
-.logs-row {
-  text-align: center;
-  font-size: 10.5px;
-}
-.logs-row .link {
+/* 除錯開關:診斷用,視覺低調些 */
+.toggle.dim { opacity: 0.8; }
+/* 同一行的「開啟資料夾」連結 */
+.toggle .link {
+  margin-left: 6px;
+  font-size: 11px;
   color: #6c6d78;
-  letter-spacing: 0.5px;
   cursor: pointer;
   text-decoration: none;
 }
-.logs-row .link:hover { color: var(--text); text-decoration: underline; }
+.toggle .link:hover { color: var(--text); text-decoration: underline; }
 
 /* ===== 作者署名(左)/ 地圖來源(右) ===== */
 .credit {
