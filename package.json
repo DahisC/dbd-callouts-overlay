@@ -44,7 +44,8 @@
     "publish": {
       "provider": "github",
       "owner": "DahisC",
-      "repo": "dbd-callouts-overlay"
+      "repo": "dbd-callouts-overlay",
+      "releaseType": "release"
     },
     "files": [
       "out/**/*",
