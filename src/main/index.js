@@ -1,8 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
-import activeWin from 'active-win';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 
@@ -356,23 +355,55 @@ let tabHeld = false;   // Tab 是否正被按住(用來忽略自動重複)
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 判斷目前最前景視窗是不是 DBD
-async function isDbdForeground() {
-  try {
-    const w = await activeWin();
-    if (w) {
-      const hay = `${w.title} ${w.owner?.name || ''} ${w.owner?.path || ''}`
-        .toLowerCase().replace(/\s+/g, '');
-      if (hay.includes('deadbydaylight')) return true;
-      // active-win 抓到的是別的視窗 → 確實不是 DBD 前景
-      return false;
+// ===== 前景視窗監看 =====
+// active-win 在 Windows 沒有原生 binary(只附 macOS),一律回傳 null,無法區分焦點。
+// 改常駐一個 PowerShell:用 user32 的 GetForegroundWindow 取得最前景程序名,
+// 持續輸出給主程序。Add-Type 的一次性編譯成本只在啟動付一次,之後查詢極便宜。
+const FG_MONITOR_PS = `
+$ErrorActionPreference='SilentlyContinue'
+Add-Type -Name Fg -Namespace W -MemberDefinition @"
+[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint p);
+"@
+while ($true) {
+  $p = 0
+  [W.Fg]::GetWindowThreadProcessId([W.Fg]::GetForegroundWindow(), [ref]$p) | Out-Null
+  $n = (Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName
+  [Console]::Out.WriteLine($n)
+  Start-Sleep -Milliseconds 600
+}
+`;
+
+let fgProc = null;
+let fgProcName = '';   // 最近一次回報的最前景程序名(無 .exe)
+let quitting = false;
+
+function startForegroundMonitor() {
+  const b64 = Buffer.from(FG_MONITOR_PS, 'utf16le').toString('base64');
+  fgProc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', b64], { windowsHide: true });
+  let buf = '';
+  fgProc.stdout.on('data', (chunk) => {
+    buf += chunk.toString();
+    const lines = buf.split(/\r?\n/);
+    buf = lines.pop();            // 留下尚未換行的殘段
+    for (const line of lines) {
+      fgProcName = line.trim();
+      const focused = isDbdForeground();
+      if (focused !== dbdFocused) {
+        dbdFocused = focused;
+        applyOverlayVisibility(); // 焦點一變就即時顯示/隱藏(約 0.6s 內)
+      }
     }
-    // active-win 抓不到視窗(DBD 受 EAC 保護 / 全螢幕等)→ 改判斷 DBD 是否在執行
-    return await isDbdRunning();
-  } catch (e) {
-    console.error('[FG] active-win failed:', e.message);
-    return await isDbdRunning(); // 偵測失敗也退而求其次用「是否在執行」
-  }
+  });
+  fgProc.on('exit', () => {
+    fgProc = null;
+    if (!quitting) setTimeout(startForegroundMonitor, 1000); // 非正常結束就重啟
+  });
+}
+
+// 目前最前景視窗是不是 DBD(讀監看程序回報的程序名,DBD 為 DeadByDaylight-Win64-Shipping)
+function isDbdForeground() {
+  return /DeadByDaylight/i.test(fgProcName);
 }
 
 // 檢查 DBD 程序是否正在執行(不論前景與否)
@@ -390,26 +421,14 @@ function isDbdRunning() {
 let gameStateTimer = null;
 function startGameStatePoll() {
   const tick = async () => {
-    const focused = await isDbdForeground();        // 前景就是 DBD
+    const focused = isDbdForeground();              // 前景就是 DBD(監看程序提供)
     const running = focused ? true : await isDbdRunning();
-    dbdFocused = focused;
-    applyOverlayVisibility();   // 依前景狀態自動顯示/隱藏地圖
     if (controlWin && !controlWin.isDestroyed()) {
       controlWin.webContents.send('game-state', { running, focused });
     }
   };
   tick();
   gameStateTimer = setInterval(tick, 2000);
-}
-
-// 帶 500ms 快取的前景判斷(按住方向鍵時避免每次都去查)
-let fgCache = { t: 0, isDbd: false };
-async function isDbdForegroundCached() {
-  const now = Date.now();
-  if (now - fgCache.t < 500) return fgCache.isDbd;
-  fgCache.t = now;
-  fgCache.isDbd = await isDbdForeground();
-  return fgCache.isDbd;
 }
 
 // 截全螢幕(原生解析度),回傳 NativeImage
@@ -435,7 +454,7 @@ async function onTabPressed() {
   capturing = true;
   try {
     tabCount++;
-    if (settings.onlyWhenDbdFocused && !(await isDbdForeground())) {
+    if (settings.onlyWhenDbdFocused && !isDbdForeground()) {
       console.log(`[TAB] #${tabCount} skip: foreground is not DBD`);
       return;
     }
@@ -521,7 +540,7 @@ async function onArrowKey(keycode) {
   else if (keycode === UiohookKey.ArrowLeft) action = () => adjustOpacity(-STEP_OPACITY);
   if (!action) return;
   // 跟 Tab 一樣:只在 DBD 為前景時生效(桌面操作不受干擾)
-  if (settings.onlyWhenDbdFocused && !(await isDbdForegroundCached())) return;
+  if (settings.onlyWhenDbdFocused && !isDbdForeground()) return;
   action();
 }
 
@@ -550,6 +569,7 @@ function startKeyHook() {
 app.whenReady().then(() => {
   loadSettings();
   startKeyHook();
+  startForegroundMonitor();
   createOverlayWindow();
   createControlWindow();
   startGameStatePoll();
@@ -564,8 +584,10 @@ app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
+  quitting = true;
   try { uIOhook.stop(); } catch {}
   if (gameStateTimer) clearInterval(gameStateTimer);
+  if (fgProc) { try { fgProc.kill(); } catch {} }
   terminateWorker().catch(() => {});
 });
 

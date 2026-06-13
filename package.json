@@ -13,7 +13,6 @@
     "release": "electron-vite build && electron-builder --win --publish always"
   },
   "dependencies": {
-    "active-win": "^8.2.1",
     "electron-updater": "^6.8.9",
     "tesseract.js": "^7.0.0",
     "uiohook-napi": "^1.5.5",
