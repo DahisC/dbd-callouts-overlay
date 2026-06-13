@@ -51,6 +51,8 @@ function openMapSource() { window.api.openExternal('https://hens333.com/callouts
     <!-- 自訂標題列 -->
     <header class="titlebar">
       <span class="tb-title">DBD CALLOUTS OVERLAY</span>
+      <span v-if="isDev" class="tb-ver dev-tag">Develop</span>
+      <span v-else-if="version" class="tb-ver">v{{ version }}</span>
       <div class="tb-controls">
         <button class="tb-btn" @click="minimize" aria-label="最小化">
           <svg viewBox="0 0 24 24"><path d="M5 12h14" /></svg>
@@ -131,15 +133,10 @@ function openMapSource() { window.api.openExternal('https://hens333.com/callouts
         @click="onUpdateClick">{{ updBtnText }}</button>
     </div>
 
-    <!-- 地圖 callout 來源聲明 -->
-    <div class="map-credit">
-      地圖 Callout 來源:<a class="link" @click="openMapSource">hens333</a>
-    </div>
-
+    <!-- 作者(左)與地圖 callout 來源(右),版本號移到標題列 -->
     <footer class="credit">
       <span>Designed by <b>Pocky</b></span>
-      <span v-if="isDev" class="ver dev-tag">Develop</span>
-      <span v-else-if="version" class="ver">v{{ version }}</span>
+      <span class="map-credit">Callouts by <a class="link" @click="openMapSource">hens333</a></span>
     </footer>
     </div>
   </div>
@@ -176,7 +173,6 @@ body {
   height: 38px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding-left: 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   font-family: var(--ui);
@@ -187,7 +183,17 @@ body {
   letter-spacing: 2px;
   color: var(--muted);
 }
-.tb-controls { display: flex; height: 100%; -webkit-app-region: no-drag; }
+/* 版本號:緊貼標題右側 */
+.tb-ver {
+  margin-left: 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: #5c5d68;
+}
+.tb-ver.dev-tag { color: #e0a23c; font-weight: 700; }
+/* 控制鈕推到最右 */
+.tb-controls { display: flex; height: 100%; margin-left: auto; -webkit-app-region: no-drag; }
 .tb-btn {
   width: 44px; height: 38px;
   border: none; background: transparent;
@@ -404,14 +410,18 @@ body {
 .upd-btn.error { color: #e0a23c; }
 .upd-btn.dev { color: var(--muted); }
 
-/* ===== 作者署名 ===== */
-/* 地圖來源聲明 */
-.map-credit {
-  text-align: center;
+/* ===== 作者署名(左)/ 地圖來源(右) ===== */
+.credit {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   font-size: 10.5px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.5px;   /* 兩側共用同一字距,避免不一致 */
   color: #5c5d68;
 }
+.credit b { font-weight: 700; color: #9a9ba6; }
+/* 地圖來源連結(字距 / 字級 / 顏色都繼承 .credit,只額外加連結樣式) */
 .map-credit .link {
   color: #9a9ba6;
   font-weight: 700;
@@ -419,18 +429,4 @@ body {
   text-decoration: none;
 }
 .map-credit .link:hover { color: var(--text); text-decoration: underline; }
-
-.credit {
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 10.5px;
-  letter-spacing: 1px;
-  color: #5c5d68;
-}
-.credit b { font-weight: 700; color: #9a9ba6; }
-.credit .ver { color: #6c6d78; }
-/* 開發模式標記 */
-.credit .dev-tag { color: #e0a23c; font-weight: 700; letter-spacing: 0.5px; }
 </style>
