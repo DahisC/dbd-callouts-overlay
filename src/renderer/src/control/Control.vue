@@ -152,6 +152,12 @@ function quit() { window.api.quit(); }
       <div class="dz-hint">{{ status.hint }}</div>
     </section>
 
+    <!-- OCR 除錯顯示(暫時)-->
+    <div v-if="ocr" class="ocr-debug" :class="{ err: ocr.error }">
+      <template v-if="ocr.error">OCR 錯誤：{{ ocr.error }}</template>
+      <template v-else>辨識「{{ ocr.text || '（空）' }}」→ {{ ocr.match }} ({{ (ocr.score || 0).toFixed(2) }}){{ ocr.switched ? ' ✓' : ' ✗' }}</template>
+    </div>
+
     <template v-if="enabled">
     <!-- 滑鼠穿透 -->
     <label class="toggle">
@@ -336,6 +342,14 @@ body {
   line-height: 1.65;
   min-height: 3.3em;   /* 預留兩行高度,讓三種狀態版面一致 */
 }
+.ocr-debug {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  line-height: 1.5;
+  padding: 0 2px;
+}
+.ocr-debug.err { color: #e0a23c; }
 
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(var(--c), 0.55); }

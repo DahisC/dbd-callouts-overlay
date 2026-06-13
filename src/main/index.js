@@ -450,6 +450,10 @@ async function onTabPressed() {
     }
   } catch (e) {
     console.error('[OCR] failed:', e);
+    // 打包版看不到 console,把錯誤送到控制台顯示以便除錯
+    if (controlWin && !controlWin.isDestroyed()) {
+      controlWin.webContents.send('ocr-result', { error: String((e && e.message) || e) });
+    }
   } finally {
     capturing = false;
   }

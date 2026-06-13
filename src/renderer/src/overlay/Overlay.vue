@@ -55,7 +55,7 @@ function onMouseUp() {
 <template>
   <div class="wrap" @mousedown="onMouseDown">
     <img v-if="src" :src="src" @load="onImgLoad" draggable="false" />
-    <div v-else class="hint">尚未選擇圖片<br />(在控制台選擇地圖)</div>
+    <div v-else class="hint">尚未選擇圖片<br />（在控制台選擇地圖）</div>
     <div class="hud" :class="{ show: hudShow }">{{ hud }}</div>
   </div>
 </template>
