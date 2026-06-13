@@ -41,6 +41,9 @@ const status = computed(() => {
 // 視窗控制
 function minimize() { window.api.minimizeControl(); }
 function quit() { window.api.quit(); }
+
+// 地圖 callout 來源,用系統瀏覽器開啟
+function openMapSource() { window.api.openExternal('https://hens333.com/callouts/'); }
 </script>
 
 <template>
@@ -126,6 +129,11 @@ function quit() { window.api.quit(); }
         :class="isDownloaded ? 'ready' : (update && update.state)"
         :disabled="updBtnBusy"
         @click="onUpdateClick">{{ updBtnText }}</button>
+    </div>
+
+    <!-- 地圖 callout 來源聲明 -->
+    <div class="map-credit">
+      地圖 Callout 來源:<a class="link" @click="openMapSource">hens333</a>
     </div>
 
     <footer class="credit">
@@ -397,6 +405,21 @@ body {
 .upd-btn.dev { color: var(--muted); }
 
 /* ===== 作者署名 ===== */
+/* 地圖來源聲明 */
+.map-credit {
+  text-align: center;
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  color: #5c5d68;
+}
+.map-credit .link {
+  color: #9a9ba6;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: none;
+}
+.map-credit .link:hover { color: var(--text); text-decoration: underline; }
+
 .credit {
   margin-top: 2px;
   display: flex;

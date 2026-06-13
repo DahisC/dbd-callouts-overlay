@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen, shell } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
 import { listMaps } from './maps.js';
@@ -255,6 +255,11 @@ ipcMain.on('set-click-through', (_e, v) => {
 ipcMain.on('set-only-dbd', (_e, v) => {
   settings.onlyWhenDbdFocused = !!v;
   saveSettings();
+});
+
+// 用系統預設瀏覽器開啟外部連結(只允許 http/https,避免被塞危險協定)
+ipcMain.on('open-external', (_e, url) => {
+  if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
 });
 
 ipcMain.on('reset-position', () => {
