@@ -12,7 +12,9 @@ function tessOptions() {
     ? join(process.resourcesPath, 'app.asar.unpacked', 'node_modules')
     : join(app.getAppPath(), 'node_modules');
   return {
-    workerPath: join(nm, 'tesseract.js', 'dist', 'worker.min.js'),
+    // OCR 跑在 Electron 主程序(Node worker_thread),必須用 Node 版 worker script;
+    // dist/worker.min.js 是瀏覽器版,在 Node 載入會丟 r.g.addEventListener is not a function
+    workerPath: join(nm, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'),
     corePath: join(nm, 'tesseract.js-core'),
     cachePath: app.getPath('userData')
   };
