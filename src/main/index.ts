@@ -120,6 +120,17 @@ function applyOverlayVisibility() {
   }
 }
 
+// 視窗安全防護:不在 app 內開新視窗(外部連結轉系統瀏覽器),並擋掉非預期的頁面導航
+function hardenWindow(win: BrowserWindow) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url !== win.webContents.getURL()) e.preventDefault(); // 只允許停在目前頁面(放行 HMR 整頁重載)
+  });
+}
+
 function createOverlayWindow() {
   overlayWin = new BrowserWindow({
     x: settings.x,
@@ -137,12 +148,14 @@ function createOverlayWindow() {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   });
 
   // 盡量讓 overlay 在全螢幕遊戲之上保持最上層
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  hardenWindow(overlayWin);
   loadPage(overlayWin, 'overlay');
 
   overlayWin.webContents.on('did-finish-load', () => {
@@ -189,9 +202,11 @@ function createControlWindow() {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   });
+  hardenWindow(controlWin);
   loadPage(controlWin, 'control');
 
   controlWin.webContents.on('did-finish-load', () => {
