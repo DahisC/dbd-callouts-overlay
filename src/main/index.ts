@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, screen, shell } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize';
 import { listMaps } from './maps';
@@ -231,19 +231,6 @@ ipcMain.on('resize-control', (_e, height) => {
 
 // ---- IPC: 控制台 -> 主程序 ----
 
-ipcMain.handle('pick-image', async () => {
-  const res = await dialog.showOpenDialog(controlWin, {
-    title: '選擇地圖圖片',
-    properties: ['openFile'],
-    filters: [{ name: '圖片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }]
-  });
-  if (res.canceled || !res.filePaths.length) return null;
-  settings.imagePath = res.filePaths[0];
-  saveSettings();
-  pushImage(); // overlay 立即切換
-  return settings.imagePath;
-});
-
 ipcMain.on('set-opacity', (_e, v) => {
   settings.opacity = v;
   if (overlayWin) overlayWin.setOpacity(v);
@@ -276,21 +263,9 @@ ipcMain.on('set-click-through', (_e, v) => {
   saveSettings();
 });
 
-ipcMain.on('set-only-dbd', (_e, v) => {
-  settings.onlyWhenDbdFocused = !!v;
-  saveSettings();
-});
-
 // 用系統預設瀏覽器開啟外部連結(只允許 http/https,避免被塞危險協定)
 ipcMain.on('open-external', (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
-});
-
-ipcMain.on('reset-position', () => {
-  settings.x = 0;
-  settings.y = 0;
-  applyOverlayGeometry();
-  saveSettings();
 });
 
 ipcMain.on('quit-app', () => app.quit());

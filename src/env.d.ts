@@ -34,7 +34,6 @@ interface GameState {
 // preload 經 contextBridge 暴露到 window.api 的介面
 interface Api {
   // 控制台
-  pickImage(): Promise<string | null>;
   listMaps(): Promise<MapItem[]>;
   selectMap(path: string): void;
   getSettings(): Promise<Settings>;
@@ -43,9 +42,7 @@ interface Api {
   setOpacity(v: number): void;
   setScale(v: number): void;
   setClickThrough(v: boolean): void;
-  setOnlyDbd(v: boolean): void;
   setHideUnfocused(v: boolean): void;
-  resetPosition(): void;
   minimizeControl(): void;
   quit(): void;
   openExternal(url: string): void;
