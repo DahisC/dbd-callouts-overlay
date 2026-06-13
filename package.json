@@ -49,10 +49,6 @@
     "files": [
       "out/**/*"
     ],
-    "asarUnpack": [
-      "**/node_modules/tesseract.js/**",
-      "**/node_modules/tesseract.js-core/**"
-    ],
     "extraResources": [
       {
         "from": "resources/maps",

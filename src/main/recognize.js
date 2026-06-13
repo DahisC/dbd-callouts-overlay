@@ -1,29 +1,20 @@
 import { createWorker } from 'tesseract.js';
 import { app } from 'electron';
-import { join } from 'path';
 
 // 地圖名稱在畫面的相對位置(正下方中央那行),依此比例裁切,適應不同解析度
 export const NAME_REGION = { x: 0.26, y: 0.796, w: 0.48, h: 0.043 };
 
-// 打包後 tesseract 的 worker / 核心要從 asar 解壓出來的真實路徑載入,
-// 語言檔快取改放可寫的 userData(預設快取路徑在打包後可能唯讀)
-function tessOptions() {
-  const nm = app.isPackaged
-    ? join(process.resourcesPath, 'app.asar.unpacked', 'node_modules')
-    : join(app.getAppPath(), 'node_modules');
-  return {
-    // OCR 跑在 Electron 主程序(Node worker_thread),必須用 Node 版 worker script;
-    // dist/worker.min.js 是瀏覽器版,在 Node 載入會丟 r.g.addEventListener is not a function
-    workerPath: join(nm, 'tesseract.js', 'src', 'worker-script', 'node', 'index.js'),
-    corePath: join(nm, 'tesseract.js-core'),
-    cachePath: app.getPath('userData')
-  };
-}
-
 let workerPromise = null;
 // 共用一個 OCR worker(第一次建立,之後重用)
+// worker / 核心路徑都用 tesseract.js 預設(在 Node 下會正確挑 Node 版 worker 與核心,
+// 直接從 asar 載入,跟 v0.0.1 一樣);只覆寫語言檔快取到可寫的 userData。
+// oem=1 (LSTM):chi_tra 走 LSTM 引擎,非 LSTM 的核心變體可從打包排除以瘦身。
 function getWorker() {
-  if (!workerPromise) workerPromise = createWorker('chi_tra', 1, tessOptions());
+  if (!workerPromise) {
+    workerPromise = createWorker('chi_tra', 1, {
+      cachePath: app.getPath('userData') // 預設快取路徑打包後可能唯讀,改放 userData
+    });
+  }
   return workerPromise;
 }
 
