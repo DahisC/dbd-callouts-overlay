@@ -349,13 +349,18 @@ const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 async function isDbdForeground() {
   try {
     const w = await activeWin();
-    if (!w) return false;
-    const hay = `${w.title} ${w.owner?.name || ''} ${w.owner?.path || ''}`
-      .toLowerCase().replace(/\s+/g, '');
-    return hay.includes('deadbydaylight');
+    if (w) {
+      const hay = `${w.title} ${w.owner?.name || ''} ${w.owner?.path || ''}`
+        .toLowerCase().replace(/\s+/g, '');
+      if (hay.includes('deadbydaylight')) return true;
+      // active-win 抓到的是別的視窗 → 確實不是 DBD 前景
+      return false;
+    }
+    // active-win 抓不到視窗(DBD 受 EAC 保護 / 全螢幕等)→ 改判斷 DBD 是否在執行
+    return await isDbdRunning();
   } catch (e) {
-    console.error('[FG] active-win failed, allow anyway:', e.message);
-    return true; // 偵測失敗就保守放行,避免功能整個失效
+    console.error('[FG] active-win failed:', e.message);
+    return await isDbdRunning(); // 偵測失敗也退而求其次用「是否在執行」
   }
 }
 
