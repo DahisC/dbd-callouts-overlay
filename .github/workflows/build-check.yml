@@ -22,6 +22,10 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      # 先跑單元測試(核心比對邏輯 + 更新按鈕狀態),擋住主要功能回歸
+      - name: Run tests
+        run: npm test
+
       # 跑與 release 相同的打包路徑,但不上傳(--publish never 由 dist 指令預設不帶)
       - name: Build installer (no publish)
         run: npm run dist
