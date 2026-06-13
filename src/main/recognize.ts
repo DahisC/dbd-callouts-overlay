@@ -1,8 +1,5 @@
 import { createWorker } from 'tesseract.js';
-import { app } from 'electron';
-
-// 地圖名稱在畫面的相對位置(正下方中央那行),依此比例裁切,適應不同解析度
-export const NAME_REGION = { x: 0.26, y: 0.796, w: 0.48, h: 0.043 };
+import { app, nativeImage } from 'electron';
 
 let workerPromise = null;
 // 共用一個 OCR worker(第一次建立,之後重用)
@@ -26,19 +23,13 @@ export async function terminateWorker() {
   }
 }
 
-// 對一張 NativeImage 裁切地圖名稱區域、放大後做 OCR,回傳辨識文字
-export async function recognizeMapName(nativeImg) {
-  const { width, height } = nativeImg.getSize();
-  const rect = {
-    x: Math.round(NAME_REGION.x * width),
-    y: Math.round(NAME_REGION.y * height),
-    width: Math.round(NAME_REGION.w * width),
-    height: Math.round(NAME_REGION.h * height)
-  };
-  // 裁切 + 放大 2 倍(小字放大有助辨識)
-  const cropped = nativeImg.crop(rect).resize({ width: rect.width * 2 });
+// 對「已裁切好的地圖名區域 PNG」做 OCR(放大 2 倍有助小字辨識),回傳辨識文字
+export async function recognizeMapName(regionPng: Buffer): Promise<string> {
+  let img = nativeImage.createFromBuffer(regionPng);
+  const { width } = img.getSize();
+  if (width > 0) img = img.resize({ width: width * 2 });
   const worker = await getWorker();
-  const { data } = await worker.recognize(cropped.toPNG());
+  const { data } = await worker.recognize(img.toPNG());
   return data.text || '';
 }
 

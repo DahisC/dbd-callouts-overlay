@@ -18,6 +18,7 @@ interface Settings {
   clickThrough: boolean;
   onlyWhenDbdFocused: boolean;
   hideWhenUnfocused: boolean;
+  debug: boolean;
 }
 
 interface UpdateStatus {
@@ -43,6 +44,7 @@ interface Api {
   setScale(v: number): void;
   setClickThrough(v: boolean): void;
   setHideUnfocused(v: boolean): void;
+  setDebug(v: boolean): void;
   minimizeControl(): void;
   quit(): void;
   openExternal(url: string): void;

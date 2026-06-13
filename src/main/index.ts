@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, screen, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, shell } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize';
 import { listMaps } from './maps';
 import { clampToVisible } from './geometry';
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 import log from 'electron-log/main';
@@ -11,28 +11,55 @@ import log from 'electron-log/main';
 // 檔案日誌:把所有 console.* 接到 electron-log,同時寫進檔案與終端機。
 // 檔名用啟動當天的本地日期(YYYY-MM-DD.log),每天一個檔;位置在 userData/logs/。
 log.initialize();
-log.transports.file.level = 'info';
+log.transports.file.level = false; // 檔案日誌預設關閉,由 debug 設定開啟
 const _d = new Date();
 const _pad = (n: number) => String(n).padStart(2, '0');
 const today = `${_d.getFullYear()}-${_pad(_d.getMonth() + 1)}-${_pad(_d.getDate())}`;
-log.transports.file.fileName = `${today}.log`;
+
+// 所有 debug 產物(日誌、截圖)都收進 userData/debug 之下
+const debugDir = () => join(app.getPath('userData'), 'debug');
+const logsDir = () => join(debugDir(), 'logs');
+const screenshotsDir = () => join(debugDir(), 'screenshots');
+log.transports.file.resolvePathFn = () => join(logsDir(), `${today}.log`);
 Object.assign(console, log.functions);
 
-// 只保留今天的 log:啟動時把日期早於今天的 log 檔刪掉
+// 清空資料夾內容(逐檔刪,單檔失敗忽略)
+function clearDir(dir: string) {
+  try {
+    for (const f of readdirSync(dir)) {
+      try { unlinkSync(join(dir, f)); } catch { /* 可能被佔用,忽略 */ }
+    }
+  } catch { /* 資料夾不存在 */ }
+}
+
+// 只保留今天的 log:把日期早於今天的 log 檔刪掉
 function cleanupOldLogs() {
   try {
-    const logsDir = dirname(log.transports.file.getFile().path);
-    for (const f of staleLogFiles(readdirSync(logsDir), today)) {
-      try { unlinkSync(join(logsDir, f)); } catch { /* 忽略單檔刪除失敗 */ }
+    for (const f of staleLogFiles(readdirSync(logsDir()), today)) {
+      try { unlinkSync(join(logsDir(), f)); } catch { /* 忽略單檔刪除失敗 */ }
     }
   } catch (e) {
     console.error('[logs] cleanup failed:', e);
   }
 }
 
+// debug 模式:開啟 → 啟用檔案日誌、保留截圖;關閉 → 停止寫檔並清空 logs 與 screenshots
+function applyDebug(on: boolean) {
+  log.transports.file.level = on ? 'info' : false;
+  if (on) {
+    try { mkdirSync(screenshotsDir(), { recursive: true }); } catch { /* ignore */ }
+    cleanupOldLogs(); // 多天累積時只留今天
+    console.log('[debug] mode on'); // level 已為 info,這行會寫進當天 log 檔
+  } else {
+    try { log.transports.file.getFile().clear(); } catch { /* ignore */ } // 清空當天 log 內容
+    clearDir(logsDir());
+    clearDir(screenshotsDir());
+  }
+}
+
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
-import { join, extname, dirname } from 'path';
-import { readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync } from 'fs';
+import { join, extname } from 'path';
+import { readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync, mkdirSync } from 'fs';
 import { staleLogFiles } from './logclean';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -48,7 +75,8 @@ const DEFAULT_SETTINGS = {
   y: 0,
   clickThrough: false,   // 滑鼠是否穿透 overlay
   onlyWhenDbdFocused: true, // Tab 偵測只在 DBD 為最前景視窗時才觸發
-  hideWhenUnfocused: true  // DBD 不在最前景時自動隱藏地圖
+  hideWhenUnfocused: true, // DBD 不在最前景時自動隱藏地圖
+  debug: false             // debug 模式:保留檔案日誌與每次截圖
 };
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -281,6 +309,12 @@ ipcMain.on('set-hide-unfocused', (_e, v) => {
   saveSettings();
 });
 
+ipcMain.on('set-debug', (_e, v) => {
+  settings.debug = !!v;
+  applyDebug(settings.debug); // 開→啟用日誌/截圖;關→停寫並清空 logs/screenshots
+  saveSettings();
+});
+
 ipcMain.on('set-click-through', (_e, v) => {
   settings.clickThrough = v;
   applyClickThrough();
@@ -292,9 +326,9 @@ ipcMain.on('open-external', (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
 });
 
-// 在檔案總管開啟日誌資料夾(electron-log 實際寫入的目錄)
+// 在檔案總管開啟 debug 資料夾(內含 logs 與 screenshots)
 ipcMain.on('open-logs', () => {
-  shell.openPath(dirname(log.transports.file.getFile().path));
+  shell.openPath(debugDir());
 });
 
 ipcMain.on('quit-app', () => app.quit());
@@ -419,21 +453,54 @@ function sendGameState() {
   }
 }
 
-// 截全螢幕(原生解析度),回傳 NativeImage
-async function captureScreen() {
-  const display = screen.getPrimaryDisplay();
-  const sf = display.scaleFactor || 1;
-  const width = Math.round(display.size.width * sf);
-  const height = Math.round(display.size.height * sf);
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: { width, height }
+// 地圖名稱所在區域:畫面切成左中右各 1/3、上下各 1/2,取「中下」那一塊
+// (中間欄、下半部)。依此比例換算成實際像素矩形。之後再依截圖往內收。
+const NAME_REGION = { x: 1 / 3, y: 1 / 2, w: 1 / 3, h: 1 / 2 };
+
+// 用 GDI(.NET CopyFromScreen)只截「地圖名矩形」,而非整張畫面。
+// 讀回的像素極少 → 避免整張畫面從 GPU 讀回造成的卡頓。回傳該矩形的 PNG buffer。
+// 注意:GDI 截圖在「獨佔全螢幕(exclusive fullscreen)」的遊戲可能截到黑畫面;
+//      DBD 用無邊框視窗(overlay 才蓋得上去)時可正常截取。
+function captureNameRegion(): Promise<Buffer> {
+  const d = screen.getPrimaryDisplay();
+  const sf = d.scaleFactor || 1;
+  const sw = Math.round(d.size.width * sf);
+  const sh = Math.round(d.size.height * sf);
+  const x = Math.round(d.bounds.x * sf + NAME_REGION.x * sw);
+  const y = Math.round(d.bounds.y * sf + NAME_REGION.y * sh);
+  const w = Math.max(1, Math.round(NAME_REGION.w * sw));
+  const h = Math.max(1, Math.round(NAME_REGION.h * sh));
+  const ps = `
+Add-Type -AssemblyName System.Drawing
+$bmp = New-Object System.Drawing.Bitmap ${w}, ${h}
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen(${x}, ${y}, 0, 0, $bmp.Size)
+$ms = New-Object System.IO.MemoryStream
+$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+[Console]::Out.Write([Convert]::ToBase64String($ms.ToArray()))
+`;
+  const b64 = Buffer.from(ps, 'utf16le').toString('base64');
+  return new Promise((resolve, reject) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-EncodedCommand', b64],
+      { windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return reject(err);
+        const buf = Buffer.from(String(stdout).trim(), 'base64');
+        console.log(`[capture] region ${w}x${h} @(${x},${y})`);
+        // debug 模式:把這次截到的矩形存檔,方便檢查 / 校正 NAME_REGION
+        if (settings.debug) {
+          try {
+            const n = new Date();
+            const stamp = `${today}_${_pad(n.getHours())}-${_pad(n.getMinutes())}-${_pad(n.getSeconds())}-${n.getMilliseconds()}`;
+            writeFileSync(join(screenshotsDir(), `${stamp}.png`), buf);
+          } catch { /* ignore */ }
+        }
+        resolve(buf);
+      }
+    );
   });
-  if (!sources.length) throw new Error('no screen source found');
-  const img = sources[0].thumbnail;
-  const sz = img.getSize();
-  console.log(`[capture] screen captured ${sz.width}x${sz.height}`);
-  return img;
 }
 
 async function onTabPressed() {
@@ -448,8 +515,8 @@ async function onTabPressed() {
     }
     console.log(`[tab] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms`);
     await delay(CAPTURE_DELAY);
-    const img = await captureScreen();
-    const text = await recognizeMapName(img);
+    const regionPng = await captureNameRegion();
+    const text = await recognizeMapName(regionPng);
     const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
@@ -546,8 +613,8 @@ function startKeyHook() {
 // ============================================
 
 app.whenReady().then(() => {
-  cleanupOldLogs(); // 啟動先清掉今天以前的 log
   loadSettings();
+  applyDebug(settings.debug); // 依設定啟用/關閉日誌與截圖,關閉時清空資料夾
   // 啟動時把 overlay 位置夾回可見螢幕(避免外接螢幕拔掉後 overlay 跑到看不見的地方)
   const clamped = clampToVisible(
     { x: settings.x, y: settings.y, width: 400, height: 300 },

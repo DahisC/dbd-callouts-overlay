@@ -11,9 +11,9 @@ let userDataDir;
 
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(join(tmpdir(), 'dbd-e2e-'));
-  // 預先放一個很舊的 log,驗證啟動會清掉今天以前的
-  mkdirSync(join(userDataDir, 'logs'), { recursive: true });
-  writeFileSync(join(userDataDir, 'logs', '2000-01-01.log'), 'old');
+  // 預先放一個很舊的 log,驗證啟動會清掉(logs 收進 debug/ 之下)
+  mkdirSync(join(userDataDir, 'debug', 'logs'), { recursive: true });
+  writeFileSync(join(userDataDir, 'debug', 'logs', '2000-01-01.log'), 'old');
   app = await electron.launch({ args: ['.', `--user-data-dir=${userDataDir}`] });
 });
 
@@ -58,19 +58,22 @@ test('切「啟用」toggle 會寫進 settings.json', async () => {
     .toBe(false);
 });
 
-test('啟動後會寫入以日期命名的檔案日誌(electron-log)', async () => {
-  const logsDir = join(userDataDir, 'logs');
+test('Debug 預設關閉:啟動時清空 logs 資料夾(預放的舊 log 被刪)', async () => {
+  const oldLog = join(userDataDir, 'debug', 'logs', '2000-01-01.log');
   await expect
-    .poll(() => {
-      if (!existsSync(logsDir)) return 0;
-      return readdirSync(logsDir).filter((f) => /^\d{4}-\d{2}-\d{2}\.log$/.test(f)).length;
-    }, { message: 'logs/ 應有 YYYY-MM-DD.log', timeout: 8_000 })
-    .toBeGreaterThan(0);
+    .poll(() => existsSync(oldLog), { message: '舊 log 應被清掉', timeout: 8_000 })
+    .toBe(false);
 });
 
-test('啟動會刪掉今天以前的舊 log', async () => {
-  const oldLog = join(userDataDir, 'logs', '2000-01-01.log');
+test('開啟 Debug 後才會寫入檔案日誌', async () => {
+  const logsDir = join(userDataDir, 'debug', 'logs');
+  const hasLog = () => existsSync(logsDir) && readdirSync(logsDir).some((f) => /^\d{4}-\d{2}-\d{2}\.log$/.test(f));
+  expect(hasLog()).toBe(false); // 預設關閉 → 還沒有 log
+
+  const control = await windowByName('control');
+  await control.locator('.toggle.dim i').first().click(); // 點除錯開關本體(避開同行的連結)
+
   await expect
-    .poll(() => existsSync(oldLog), { message: '舊 log 應被刪除', timeout: 8_000 })
-    .toBe(false);
+    .poll(hasLog, { message: '開啟除錯後 logs/ 應出現 YYYY-MM-DD.log', timeout: 8_000 })
+    .toBe(true);
 });
