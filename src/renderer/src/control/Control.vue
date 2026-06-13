@@ -1,120 +1,44 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { useSettings } from '../composables/useSettings';
+import { useMaps } from '../composables/useMaps';
+import { useUpdater } from '../composables/useUpdater';
+import { useGameStatus } from '../composables/useGameStatus';
+import { useAutoFit } from '../composables/useAutoFit';
 
-// ===== 狀態與接線(保留供之後的介面綁定,目前畫面未使用)=====
-const enabled = ref(true);
-const imagePath = ref('');
-const opacity = ref(0.5);
-const scale = ref(0.5);
-const clickThrough = ref(false);
-const hideWhenUnfocused = ref(true);
-const maps = ref([]);
-const selectedMap = ref('');
-const focused = ref(false); // DBD 是否為最前景視窗
-const version = ref('');
-const update = ref(null);   // 更新狀態 { state, percent, version, message }
 const isDev = import.meta.env.DEV;  // 開發模式(打包後為 false)
 
-// 目前地圖名稱(由選取/辨識的路徑推算)
-const currentMapName = computed(() => {
-  const p = selectedMap.value || imagePath.value;
-  if (!p) return '未選擇';
-  const m = maps.value.find((x) => x.path === p);
-  return m ? m.name : p.split(/[\\/]/).pop().replace(/\.[^.]+$/, '');
-});
+// 外觀 / 行為設定(啟用、透明度、大小、滑鼠穿透、只在遊戲時顯示)
+const {
+  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused,
+  opacityFill, scaleFill,
+  onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
+} = useSettings();
 
-// 依遊戲狀態給對應的顏色 / 標題 / 提示
+// 地圖清單與目前選取(下拉與 imagePath 連動)
+const { currentMapName } = useMaps(imagePath);
+
+// 自動更新(狀態 / 按鈕文字 / 點擊)
+const { update, isDownloaded, updBtnText, updBtnBusy, onUpdateClick } = useUpdater();
+
+// DBD 前景狀態
+const { focused } = useGameStatus();
+
+// 視窗高度自動貼合內容
+useAutoFit();
+
+// 應用程式版本(footer 顯示)
+const version = ref('');
+onMounted(async () => { version.value = await window.api.getVersion(); });
+
+// 依啟用 / 前景狀態給對應的顏色 / 標題 / 提示
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
   if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
   return { key: 'ok', title: '已就緒', hint: `按 Tab 開啟計分板以自動偵測地圖\n目前地圖：${currentMapName.value}` };
 });
 
-// 把目前內容高度回報給主程序,讓視窗高度貼合內容
-function reportSize() {
-  window.api.resizeControl(Math.ceil(document.body.scrollHeight));
-}
-
-onMounted(async () => {
-  const s = await window.api.getSettings();
-  applySettings(s);
-  maps.value = await window.api.listMaps();
-  version.value = await window.api.getVersion();
-  await nextTick();
-  reportSize();
-  // 內容變動時自動重新貼合
-  new ResizeObserver(reportSize).observe(document.body);
-});
-
-window.api.onSettings(applySettings);
-window.api.onGameState((st) => { focused.value = !!st.focused; });
-window.api.onUpdateStatus((s) => { update.value = s; });
-
-// 更新狀態文字
-const updateText = computed(() => {
-  const u = update.value;
-  if (!u) return '';
-  switch (u.state) {
-    case 'checking': return '檢查更新中…';
-    case 'available': return `發現新版 v${u.version}，下載中…`;
-    case 'downloading': return `下載中 ${u.percent}%`;
-    case 'downloaded': return `v${u.version} 已就緒`;
-    case 'latest': return '已是最新版本';
-    case 'dev': return '開發模式無法檢查更新';
-    case 'error': return '檢查失敗，請稍後再試';
-    default: return '';
-  }
-});
-
-// 更新按鈕:所有狀態都整合在這一顆按鈕上
-const isDownloaded = computed(() => !!update.value && update.value.state === 'downloaded');
-// 按鈕文字:下載完成顯示安裝提示,其餘顯示狀態文字,沒狀態就顯示預設
-const updBtnText = computed(() => isDownloaded.value ? '重啟以安裝更新' : (updateText.value || '檢查更新'));
-// 檢查中 / 下載中時 disable,避免重複觸發
-const updBtnBusy = computed(() => !!update.value && (update.value.state === 'checking' || update.value.state === 'downloading'));
-
-function onUpdateClick() {
-  if (isDownloaded.value) installUpdate();
-  else checkUpdate();
-}
-function checkUpdate() {
-  update.value = { state: 'checking' };
-  window.api.checkUpdate();
-}
-function installUpdate() { window.api.installUpdate(); }
-
-const groupedMaps = computed(() => {
-  const g = {};
-  for (const m of maps.value) (g[m.group || '其他'] ||= []).push(m);
-  return g;
-});
-
-// 拉桿填色比例
-const opacityFill = computed(() => `${((opacity.value - 0.1) / 0.9) * 100}%`);
-const scaleFill = computed(() => `${((scale.value - 0.1) / 0.9) * 100}%`);
-
-function applySettings(s) {
-  if (!s) return;
-  enabled.value = s.enabled ?? true;
-  imagePath.value = s.imagePath || '';
-  opacity.value = s.opacity ?? 0.5;
-  scale.value = s.scale ?? 0.5;
-  clickThrough.value = !!s.clickThrough;
-  hideWhenUnfocused.value = s.hideWhenUnfocused ?? true;
-  selectedMap.value = s.imagePath || '';
-}
-
-function onSelectMap() {
-  if (selectedMap.value) {
-    window.api.selectMap(selectedMap.value);
-    imagePath.value = selectedMap.value;
-  }
-}
-function onEnabled() { window.api.setEnabled(enabled.value); }
-function onOpacity() { window.api.setOpacity(Number(opacity.value)); }
-function onScale() { window.api.setScale(Number(scale.value)); }
-function onClickThrough() { window.api.setClickThrough(clickThrough.value); }
-function onHideUnfocused() { window.api.setHideUnfocused(hideWhenUnfocused.value); }
+// 視窗控制
 function minimize() { window.api.minimizeControl(); }
 function quit() { window.api.quit(); }
 </script>

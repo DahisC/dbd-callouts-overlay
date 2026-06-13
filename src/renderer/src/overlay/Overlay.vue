@@ -1,55 +1,22 @@
 <script setup>
 import { ref } from 'vue';
+import { useHud } from '../composables/useHud';
+import { useOverlayDrag } from '../composables/useOverlayDrag';
 
+// 地圖圖片(主程序送來的已是 data URL,直接用)
 const src = ref('');
-
-// 主程序送來的已是 data URL,直接用
-window.api.onSetImage((dataUrl) => {
-  src.value = dataUrl || '';
-});
-
-// 調整大小/透明度時,在圖上浮現數值約 1 秒後淡出
-const hud = ref('');
-const hudShow = ref(false);
-let hudTimer = null;
-window.api.onShowHud((text) => {
-  hud.value = text;
-  hudShow.value = true;
-  if (hudTimer) clearTimeout(hudTimer);
-  hudTimer = setTimeout(() => { hudShow.value = false; }, 1000);
-});
+window.api.onSetImage((dataUrl) => { src.value = dataUrl || ''; });
 
 // 圖片載入完成後,把原始尺寸回報給主程序以決定視窗大小
 function onImgLoad(e) {
   window.api.reportImageSize({ w: e.target.naturalWidth, h: e.target.naturalHeight });
 }
 
-// --- 自訂拖曳:用滑鼠在螢幕上的位移驅動,主程序會即時夾在邊界內 ---
-let dragging = false;
-let startX = 0;
-let startY = 0;
+// 數值提示 HUD(調整大小 / 透明度時浮現)
+const { hud, hudShow } = useHud();
 
-function onMouseDown(e) {
-  if (e.button !== 0) return;        // 只接受左鍵
-  dragging = true;
-  startX = e.screenX;
-  startY = e.screenY;
-  window.api.dragStart();
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
-}
-
-function onMouseMove(e) {
-  if (!dragging) return;
-  window.api.dragMove(e.screenX - startX, e.screenY - startY);
-}
-
-function onMouseUp() {
-  dragging = false;
-  window.api.dragEnd();
-  window.removeEventListener('mousemove', onMouseMove);
-  window.removeEventListener('mouseup', onMouseUp);
-}
+// 自訂拖曳(回傳的 onMouseDown 綁在容器上)
+const { onMouseDown } = useOverlayDrag();
 </script>
 
 <template>
