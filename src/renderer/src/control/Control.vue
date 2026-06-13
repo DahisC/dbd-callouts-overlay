@@ -151,11 +151,19 @@ function openMapSource() { window.api.openExternal('https://hens333.com/callouts
   font-display: swap;
 }
 
+/* 只把數字(0-9)指到乾淨的系統 Latin 字:子集化的 Noto Sans TC 沒收數字,
+   會 fallback 到 JhengHei(「1」帶襯線)。放在字型堆疊最前面只影響數字字符。 */
+@font-face {
+  font-family: 'CleanDigits';
+  src: local('Segoe UI'), local('Arial');
+  unicode-range: U+0030-0039;
+}
+
 :root {
   --bg: #0d0e12;
   --text: #ecedf2;
   --muted: #8a8b98;
-  --ui: "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+  --ui: "CleanDigits", "Noto Sans TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
 }
 
 * { box-sizing: border-box; }

@@ -28,6 +28,12 @@ const { onMouseDown } = useOverlayDrag();
 </template>
 
 <style>
+/* 只把數字(0-9)指到乾淨的系統 Latin 字,讓 HUD 的「大小/透明度 %」數字不帶襯線 */
+@font-face {
+  font-family: 'CleanDigits';
+  src: local('Segoe UI'), local('Arial');
+  unicode-range: U+0030-0039;
+}
 html, body, #app {
   margin: 0;
   padding: 0;
@@ -53,7 +59,7 @@ html, body, #app {
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.72);
   color: #fff;
-  font-family: "Microsoft JhengHei", sans-serif;
+  font-family: "CleanDigits", "Microsoft JhengHei", sans-serif;
   font-size: 15px;
   font-weight: 700;
   white-space: nowrap;
