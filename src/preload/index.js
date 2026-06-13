@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('api', {
   resetPosition: () => ipcRenderer.send('reset-position'),
   minimizeControl: () => ipcRenderer.send('control-minimize'),
   quit: () => ipcRenderer.send('quit-app'),
+  openExternal: (url) => ipcRenderer.send('open-external', url),
   checkUpdate: () => ipcRenderer.send('check-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
   onUpdateStatus: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),

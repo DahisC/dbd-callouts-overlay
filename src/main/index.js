@@ -1,49 +1,14 @@
-import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen, shell } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
+import { listMaps } from './maps.js';
 import { spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
-import { join, extname, basename } from 'path';
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
-
-const MAP_EXTS = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp'];
-
-// 內建地圖資料夾:開發時讀專案 resources/maps,打包後讀 exe 旁的 resources/maps
-function mapsDir() {
-  return app.isPackaged
-    ? join(process.resourcesPath, 'maps')
-    : join(__dirname, '../../resources/maps');
-}
-
-// 掃描地圖資料夾(含子資料夾),回傳 [{ name, path, group }]
-// group = 直屬的子資料夾(地區)名稱;直接放在 maps 根目錄的圖 group 為 ''
-function listMaps() {
-  const root = mapsDir();
-  const out = [];
-  function walk(dir, group) {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full, group || entry.name); // 第一層子資料夾名當作地區
-      } else if (MAP_EXTS.includes(extname(entry.name).toLowerCase())) {
-        out.push({ name: basename(entry.name, extname(entry.name)), path: full, group: group || '' });
-      }
-    }
-  }
-  try {
-    if (!existsSync(root)) mkdirSync(root, { recursive: true });
-    walk(root, '');
-  } catch (e) {
-    console.error('[maps] failed to scan maps folder:', e);
-  }
-  return out.sort((a, b) =>
-    (a.group || '').localeCompare(b.group || '', 'zh-Hant') ||
-    a.name.localeCompare(b.name, 'zh-Hant')
-  );
-}
+import { join, extname } from 'path';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
@@ -290,6 +255,11 @@ ipcMain.on('set-click-through', (_e, v) => {
 ipcMain.on('set-only-dbd', (_e, v) => {
   settings.onlyWhenDbdFocused = !!v;
   saveSettings();
+});
+
+// 用系統預設瀏覽器開啟外部連結(只允許 http/https,避免被塞危險協定)
+ipcMain.on('open-external', (_e, url) => {
+  if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
 });
 
 ipcMain.on('reset-position', () => {

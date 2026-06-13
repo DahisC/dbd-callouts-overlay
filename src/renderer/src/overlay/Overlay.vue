@@ -1,55 +1,22 @@
 <script setup>
 import { ref } from 'vue';
+import { useHud } from '../composables/useHud';
+import { useOverlayDrag } from '../composables/useOverlayDrag';
 
+// 地圖圖片(主程序送來的已是 data URL,直接用)
 const src = ref('');
-
-// 主程序送來的已是 data URL,直接用
-window.api.onSetImage((dataUrl) => {
-  src.value = dataUrl || '';
-});
-
-// 調整大小/透明度時,在圖上浮現數值約 1 秒後淡出
-const hud = ref('');
-const hudShow = ref(false);
-let hudTimer = null;
-window.api.onShowHud((text) => {
-  hud.value = text;
-  hudShow.value = true;
-  if (hudTimer) clearTimeout(hudTimer);
-  hudTimer = setTimeout(() => { hudShow.value = false; }, 1000);
-});
+window.api.onSetImage((dataUrl) => { src.value = dataUrl || ''; });
 
 // 圖片載入完成後,把原始尺寸回報給主程序以決定視窗大小
 function onImgLoad(e) {
   window.api.reportImageSize({ w: e.target.naturalWidth, h: e.target.naturalHeight });
 }
 
-// --- 自訂拖曳:用滑鼠在螢幕上的位移驅動,主程序會即時夾在邊界內 ---
-let dragging = false;
-let startX = 0;
-let startY = 0;
+// 數值提示 HUD(調整大小 / 透明度時浮現)
+const { hud, hudShow } = useHud();
 
-function onMouseDown(e) {
-  if (e.button !== 0) return;        // 只接受左鍵
-  dragging = true;
-  startX = e.screenX;
-  startY = e.screenY;
-  window.api.dragStart();
-  window.addEventListener('mousemove', onMouseMove);
-  window.addEventListener('mouseup', onMouseUp);
-}
-
-function onMouseMove(e) {
-  if (!dragging) return;
-  window.api.dragMove(e.screenX - startX, e.screenY - startY);
-}
-
-function onMouseUp() {
-  dragging = false;
-  window.api.dragEnd();
-  window.removeEventListener('mousemove', onMouseMove);
-  window.removeEventListener('mouseup', onMouseUp);
-}
+// 自訂拖曳(回傳的 onMouseDown 綁在容器上)
+const { onMouseDown } = useOverlayDrag();
 </script>
 
 <template>
@@ -61,6 +28,12 @@ function onMouseUp() {
 </template>
 
 <style>
+/* 只把數字(0-9)指到乾淨的系統 Latin 字,讓 HUD 的「大小/透明度 %」數字不帶襯線 */
+@font-face {
+  font-family: 'CleanDigits';
+  src: local('Segoe UI'), local('Arial');
+  unicode-range: U+0030-0039;
+}
 html, body, #app {
   margin: 0;
   padding: 0;
@@ -86,7 +59,7 @@ html, body, #app {
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.72);
   color: #fff;
-  font-family: "Microsoft JhengHei", sans-serif;
+  font-family: "CleanDigits", "Microsoft JhengHei", sans-serif;
   font-size: 15px;
   font-weight: 700;
   white-space: nowrap;
