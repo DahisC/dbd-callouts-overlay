@@ -171,7 +171,7 @@ function quit() { window.api.quit(); }
 
     <!-- 不在前景時隱藏地圖 -->
     <label class="toggle">
-      <span>離開遊戲時隱藏地圖</span>
+      <span>只在遊戲時顯示地圖</span>
       <input type="checkbox" v-model="hideWhenUnfocused" @change="onHideUnfocused" /><i></i>
     </label>
 
