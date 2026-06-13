@@ -436,9 +436,14 @@ async function onTabPressed() {
     const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
-    console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ` +
-      (best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match') +
-      (switched ? ' [switched]' : ' [skipped]'));
+    const matchInfo = best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match';
+    if (switched) {
+      // 有切換才印完整辨識文字(這時才需要看原文)
+      console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ${matchInfo} [switched]`);
+    } else {
+      // 沒切換通常是雜訊辨識,不印整串雜訊,只留比對結果與分數,保持 log 乾淨
+      console.log(`[ocr] ${matchInfo} [skipped]`);
+    }
 
     if (switched) {
       settings.imagePath = best.map.path;
