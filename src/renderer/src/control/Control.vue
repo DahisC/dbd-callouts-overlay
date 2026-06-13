@@ -66,9 +66,17 @@ const updateText = computed(() => {
   }
 });
 
-// 「檢查更新」按鈕內顯示的文字:有狀態就顯示狀態,否則顯示預設
-const checkBtnText = computed(() => updateText.value || '檢查更新');
+// 更新按鈕:所有狀態都整合在這一顆按鈕上
+const isDownloaded = computed(() => !!update.value && update.value.state === 'downloaded');
+// 按鈕文字:下載完成顯示安裝提示,其餘顯示狀態文字,沒狀態就顯示預設
+const updBtnText = computed(() => isDownloaded.value ? '重啟以安裝更新' : (updateText.value || '檢查更新'));
+// 檢查中 / 下載中時 disable,避免重複觸發
+const updBtnBusy = computed(() => !!update.value && (update.value.state === 'checking' || update.value.state === 'downloading'));
 
+function onUpdateClick() {
+  if (isDownloaded.value) installUpdate();
+  else checkUpdate();
+}
 function checkUpdate() {
   update.value = { state: 'checking' };
   window.api.checkUpdate();
@@ -187,18 +195,13 @@ function quit() { window.api.quit(); }
     </section>
     </template>
 
-    <!-- 更新 -->
+    <!-- 更新:所有狀態(含下載進度、下載完成安裝)整合在同一顆按鈕 -->
     <div class="update">
       <button
-        v-if="update && update.state === 'downloaded'"
-        class="upd-btn ready"
-        @click="installUpdate">重啟以安裝更新</button>
-      <button
-        v-else
         class="upd-btn"
-        :class="update && update.state"
-        :disabled="update && (update.state === 'checking' || update.state === 'downloading')"
-        @click="checkUpdate">{{ checkBtnText }}</button>
+        :class="isDownloaded ? 'ready' : (update && update.state)"
+        :disabled="updBtnBusy"
+        @click="onUpdateClick">{{ updBtnText }}</button>
     </div>
 
     <footer class="credit">
