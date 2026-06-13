@@ -67,6 +67,9 @@ const updateText = computed(() => {
   }
 });
 
+// 「檢查更新」按鈕內顯示的文字:有狀態就顯示狀態,否則顯示預設
+const checkBtnText = computed(() => updateText.value || '檢查更新');
+
 function checkUpdate() {
   update.value = { state: 'checking' };
   window.api.checkUpdate();
@@ -186,9 +189,9 @@ function quit() { window.api.quit(); }
       <button
         v-else
         class="upd-btn"
+        :class="update && update.state"
         :disabled="update && (update.state === 'checking' || update.state === 'downloading')"
-        @click="checkUpdate">檢查更新</button>
-      <span v-if="updateText" class="upd-text" :class="update.state">{{ updateText }}</span>
+        @click="checkUpdate">{{ checkBtnText }}</button>
     </div>
 
     <footer class="credit">
@@ -455,9 +458,9 @@ body {
 .upd-btn:disabled { opacity: 0.5; cursor: default; }
 .upd-btn.ready { background: #46d6a0; border-color: #46d6a0; color: #0d2a1f; font-weight: 700; }
 .upd-btn.ready:hover { background: #54e2ad; }
-.upd-text { font-size: 11px; color: var(--muted); }
-.upd-text.downloaded { color: #46d6a0; }
-.upd-text.error { color: #e0a23c; }
+/* 狀態文字直接顯示在按鈕內,錯誤用琥珀色提示 */
+.upd-btn.error { color: #e0a23c; }
+.upd-btn.dev { color: var(--muted); }
 
 /* ===== 作者署名 ===== */
 .credit {
