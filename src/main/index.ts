@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen, shell } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
-import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
-import { listMaps } from './maps.js';
+import { recognizeMapName, matchMap, terminateWorker } from './recognize';
+import { listMaps } from './maps';
 import { spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;

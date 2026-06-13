@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useSettings } from '../composables/useSettings';
 import { useMaps } from '../composables/useMaps';

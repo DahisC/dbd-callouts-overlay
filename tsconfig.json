@@ -1,0 +1,21 @@
+{
+  // 務實起步:先寬鬆(strict 關),之後可逐步收緊。
+  // 測試 / e2e 由各自的 runner(vitest / playwright)用 esbuild 編譯,不納入 typecheck。
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "jsx": "preserve",
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "useDefineForClassFields": true,
+    "strict": false,
+    "noImplicitAny": false
+  },
+  "include": ["src", "src/env.d.ts"]
+}

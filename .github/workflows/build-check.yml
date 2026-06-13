@@ -22,6 +22,10 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      # 型別檢查(vue-tsc),抓出型別錯誤
+      - name: Type check
+        run: npm run typecheck
+
       # 先跑單元測試(核心比對邏輯 + 更新按鈕狀態),擋住主要功能回歸
       - name: Run tests
         run: npm test

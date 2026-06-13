@@ -42,5 +42,5 @@ export async function recognizeMapName(nativeImg) {
   return data.text || '';
 }
 
-// 比對邏輯已移到 ./match.js(純函式,便於測試);此處 re-export 維持既有 import 路徑
-export { matchMap } from './match.js';
+// 比對邏輯已移到 ./match(純函式,便於測試);此處 re-export 維持既有 import 路徑
+export { matchMap } from './match';

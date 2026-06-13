@@ -7,13 +7,13 @@ export default defineConfig({
     // 把 dependencies(含原生模組 uiohook-napi)排除在 bundle 外
     plugins: [externalizeDepsPlugin()],
     build: {
-      lib: { entry: resolve(__dirname, 'src/main/index.js') }
+      lib: { entry: resolve(__dirname, 'src/main/index.ts') }
     }
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      lib: { entry: resolve(__dirname, 'src/preload/index.js') }
+      lib: { entry: resolve(__dirname, 'src/preload/index.ts') }
     }
   },
   renderer: {
