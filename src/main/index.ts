@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen, shell } f
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize';
 import { listMaps } from './maps';
+import { clampToVisible } from './geometry';
 import { spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
@@ -522,6 +523,13 @@ function startKeyHook() {
 
 app.whenReady().then(() => {
   loadSettings();
+  // 啟動時把 overlay 位置夾回可見螢幕(避免外接螢幕拔掉後 overlay 跑到看不見的地方)
+  const clamped = clampToVisible(
+    { x: settings.x, y: settings.y, width: 400, height: 300 },
+    screen.getAllDisplays()
+  );
+  settings.x = clamped.x;
+  settings.y = clamped.y;
   startKeyHook();
   startForegroundMonitor();
   createOverlayWindow();
