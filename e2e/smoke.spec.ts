@@ -1,5 +1,5 @@
 import { test, expect, _electron as electron } from '@playwright/test';
-import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync } from 'fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -11,6 +11,9 @@ let userDataDir;
 
 test.beforeAll(async () => {
   userDataDir = mkdtempSync(join(tmpdir(), 'dbd-e2e-'));
+  // 預先放一個很舊的 log,驗證啟動會清掉今天以前的
+  mkdirSync(join(userDataDir, 'logs'), { recursive: true });
+  writeFileSync(join(userDataDir, 'logs', '2000-01-01.log'), 'old');
   app = await electron.launch({ args: ['.', `--user-data-dir=${userDataDir}`] });
 });
 
@@ -63,4 +66,11 @@ test('啟動後會寫入以日期命名的檔案日誌(electron-log)', async () 
       return readdirSync(logsDir).filter((f) => /^\d{4}-\d{2}-\d{2}\.log$/.test(f)).length;
     }, { message: 'logs/ 應有 YYYY-MM-DD.log', timeout: 8_000 })
     .toBeGreaterThan(0);
+});
+
+test('啟動會刪掉今天以前的舊 log', async () => {
+  const oldLog = join(userDataDir, 'logs', '2000-01-01.log');
+  await expect
+    .poll(() => existsSync(oldLog), { message: '舊 log 應被刪除', timeout: 8_000 })
+    .toBe(false);
 });

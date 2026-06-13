@@ -14,12 +14,26 @@ log.initialize();
 log.transports.file.level = 'info';
 const _d = new Date();
 const _pad = (n: number) => String(n).padStart(2, '0');
-log.transports.file.fileName = `${_d.getFullYear()}-${_pad(_d.getMonth() + 1)}-${_pad(_d.getDate())}.log`;
+const today = `${_d.getFullYear()}-${_pad(_d.getMonth() + 1)}-${_pad(_d.getDate())}`;
+log.transports.file.fileName = `${today}.log`;
 Object.assign(console, log.functions);
+
+// 只保留今天的 log:啟動時把日期早於今天的 log 檔刪掉
+function cleanupOldLogs() {
+  try {
+    const logsDir = dirname(log.transports.file.getFile().path);
+    for (const f of staleLogFiles(readdirSync(logsDir), today)) {
+      try { unlinkSync(join(logsDir, f)); } catch { /* 忽略單檔刪除失敗 */ }
+    }
+  } catch (e) {
+    console.error('[logs] cleanup failed:', e);
+  }
+}
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
 import { join, extname, dirname } from 'path';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync } from 'fs';
+import { staleLogFiles } from './logclean';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
@@ -532,6 +546,7 @@ function startKeyHook() {
 // ============================================
 
 app.whenReady().then(() => {
+  cleanupOldLogs(); // 啟動先清掉今天以前的 log
   loadSettings();
   // 啟動時把 overlay 位置夾回可見螢幕(避免外接螢幕拔掉後 overlay 跑到看不見的地方)
   const clamped = clampToVisible(
