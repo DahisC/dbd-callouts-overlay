@@ -232,14 +232,14 @@ ipcMain.on('set-opacity', (_e, v) => {
   settings.opacity = v;
   if (overlayWin) overlayWin.setOpacity(v);
   showHud(`透明度 ${Math.round(v * 100)}%`);
-  saveSettings();
+  scheduleSave(); // 滑桿拖曳會狂發事件,延遲寫檔避免每次同步寫盤
 });
 
 ipcMain.on('set-scale', (_e, v) => {
   settings.scale = v;
   applyOverlayGeometry();
   showHud(`大小 ${Math.round(v * 100)}%`);
-  saveSettings();
+  scheduleSave(); // 同上,滑桿連續事件延遲寫檔
 });
 
 ipcMain.on('set-enabled', (_e, v) => {
