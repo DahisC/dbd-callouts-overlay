@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue';
 import { useHud } from '../composables/useHud';
 import { useOverlayDrag } from '../composables/useOverlayDrag';

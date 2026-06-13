@@ -1,14 +1,39 @@
-import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, desktopCapturer, screen, shell } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
-import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
-import { listMaps } from './maps.js';
+import { recognizeMapName, matchMap, terminateWorker } from './recognize';
+import { listMaps } from './maps';
+import { clampToVisible } from './geometry';
 import { spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
+import log from 'electron-log/main';
+
+// 檔案日誌:把所有 console.* 接到 electron-log,同時寫進檔案與終端機。
+// 檔名用啟動當天的本地日期(YYYY-MM-DD.log),每天一個檔;位置在 userData/logs/。
+log.initialize();
+log.transports.file.level = 'info';
+const _d = new Date();
+const _pad = (n: number) => String(n).padStart(2, '0');
+const today = `${_d.getFullYear()}-${_pad(_d.getMonth() + 1)}-${_pad(_d.getDate())}`;
+log.transports.file.fileName = `${today}.log`;
+Object.assign(console, log.functions);
+
+// 只保留今天的 log:啟動時把日期早於今天的 log 檔刪掉
+function cleanupOldLogs() {
+  try {
+    const logsDir = dirname(log.transports.file.getFile().path);
+    for (const f of staleLogFiles(readdirSync(logsDir), today)) {
+      try { unlinkSync(join(logsDir, f)); } catch { /* 忽略單檔刪除失敗 */ }
+    }
+  } catch (e) {
+    console.error('[logs] cleanup failed:', e);
+  }
+}
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
-import { join, extname } from 'path';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join, extname, dirname } from 'path';
+import { readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync } from 'fs';
+import { staleLogFiles } from './logclean';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
 
@@ -45,6 +70,14 @@ function saveSettings() {
   } catch (e) {
     console.error('[settings] failed to save settings:', e);
   }
+}
+
+// 地圖清單快取:避免每次按 Tab 都同步重掃磁碟。
+// 使用者開控制台時(list-maps)才強制重掃,以撿到新放入的地圖。
+let mapsCache: MapItem[] | null = null;
+function getMaps(forceRefresh = false) {
+  if (forceRefresh || !mapsCache) mapsCache = listMaps();
+  return mapsCache;
 }
 
 const MIME = {
@@ -111,6 +144,17 @@ function applyOverlayVisibility() {
   }
 }
 
+// 視窗安全防護:不在 app 內開新視窗(外部連結轉系統瀏覽器),並擋掉非預期的頁面導航
+function hardenWindow(win: BrowserWindow) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url !== win.webContents.getURL()) e.preventDefault(); // 只允許停在目前頁面(放行 HMR 整頁重載)
+  });
+}
+
 function createOverlayWindow() {
   overlayWin = new BrowserWindow({
     x: settings.x,
@@ -128,12 +172,14 @@ function createOverlayWindow() {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   });
 
   // 盡量讓 overlay 在全螢幕遊戲之上保持最上層
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
+  hardenWindow(overlayWin);
   loadPage(overlayWin, 'overlay');
 
   overlayWin.webContents.on('did-finish-load', () => {
@@ -180,9 +226,11 @@ function createControlWindow() {
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      sandbox: true
     }
   });
+  hardenWindow(controlWin);
   loadPage(controlWin, 'control');
 
   controlWin.webContents.on('did-finish-load', () => {
@@ -207,31 +255,18 @@ ipcMain.on('resize-control', (_e, height) => {
 
 // ---- IPC: 控制台 -> 主程序 ----
 
-ipcMain.handle('pick-image', async () => {
-  const res = await dialog.showOpenDialog(controlWin, {
-    title: '選擇地圖圖片',
-    properties: ['openFile'],
-    filters: [{ name: '圖片', extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'] }]
-  });
-  if (res.canceled || !res.filePaths.length) return null;
-  settings.imagePath = res.filePaths[0];
-  saveSettings();
-  pushImage(); // overlay 立即切換
-  return settings.imagePath;
-});
-
 ipcMain.on('set-opacity', (_e, v) => {
   settings.opacity = v;
   if (overlayWin) overlayWin.setOpacity(v);
   showHud(`透明度 ${Math.round(v * 100)}%`);
-  saveSettings();
+  scheduleSave(); // 滑桿拖曳會狂發事件,延遲寫檔避免每次同步寫盤
 });
 
 ipcMain.on('set-scale', (_e, v) => {
   settings.scale = v;
   applyOverlayGeometry();
   showHud(`大小 ${Math.round(v * 100)}%`);
-  saveSettings();
+  scheduleSave(); // 同上,滑桿連續事件延遲寫檔
 });
 
 ipcMain.on('set-enabled', (_e, v) => {
@@ -252,21 +287,14 @@ ipcMain.on('set-click-through', (_e, v) => {
   saveSettings();
 });
 
-ipcMain.on('set-only-dbd', (_e, v) => {
-  settings.onlyWhenDbdFocused = !!v;
-  saveSettings();
-});
-
 // 用系統預設瀏覽器開啟外部連結(只允許 http/https,避免被塞危險協定)
 ipcMain.on('open-external', (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
 });
 
-ipcMain.on('reset-position', () => {
-  settings.x = 0;
-  settings.y = 0;
-  applyOverlayGeometry();
-  saveSettings();
+// 在檔案總管開啟日誌資料夾(electron-log 實際寫入的目錄)
+ipcMain.on('open-logs', () => {
+  shell.openPath(dirname(log.transports.file.getFile().path));
 });
 
 ipcMain.on('quit-app', () => app.quit());
@@ -306,8 +334,8 @@ ipcMain.on('check-update', () => {
 // 按鈕:立即重啟安裝
 ipcMain.on('install-update', () => autoUpdater.quitAndInstall());
 
-// 列出內建地圖
-ipcMain.handle('list-maps', () => listMaps());
+// 列出內建地圖(使用者開控制台時強制重掃,撿到新放入的地圖)
+ipcMain.handle('list-maps', () => getMaps(true));
 
 // 從下拉選單選了某張內建地圖
 ipcMain.on('select-map', (_e, path) => {
@@ -422,12 +450,17 @@ async function onTabPressed() {
     await delay(CAPTURE_DELAY);
     const img = await captureScreen();
     const text = await recognizeMapName(img);
-    const best = matchMap(text, listMaps());
+    const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
-    console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ` +
-      (best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match') +
-      (switched ? ' [switched]' : ' [skipped]'));
+    const matchInfo = best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match';
+    if (switched) {
+      // 有切換才印完整辨識文字(這時才需要看原文)
+      console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ${matchInfo} [switched]`);
+    } else {
+      // 沒切換通常是雜訊辨識,不印整串雜訊,只留比對結果與分數,保持 log 乾淨
+      console.log(`[ocr] ${matchInfo} [skipped]`);
+    }
 
     if (switched) {
       settings.imagePath = best.map.path;
@@ -513,7 +546,15 @@ function startKeyHook() {
 // ============================================
 
 app.whenReady().then(() => {
+  cleanupOldLogs(); // 啟動先清掉今天以前的 log
   loadSettings();
+  // 啟動時把 overlay 位置夾回可見螢幕(避免外接螢幕拔掉後 overlay 跑到看不見的地方)
+  const clamped = clampToVisible(
+    { x: settings.x, y: settings.y, width: 400, height: 300 },
+    screen.getAllDisplays()
+  );
+  settings.x = clamped.x;
+  settings.y = clamped.y;
   startKeyHook();
   startForegroundMonitor();
   createOverlayWindow();

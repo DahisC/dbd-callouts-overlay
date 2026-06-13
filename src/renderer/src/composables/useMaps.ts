@@ -1,9 +1,9 @@
-import { ref, computed, watch, onMounted } from 'vue';
+import { ref, computed, watch, onMounted, type Ref } from 'vue';
 
 // 內建地圖清單與目前選取。
 // 傳入 imagePath(來自 useSettings),下拉選取會與它雙向連動。
-export function useMaps(imagePath) {
-  const maps = ref([]);          // [{ name, path, group }]
+export function useMaps(imagePath: Ref<string>) {
+  const maps = ref<MapItem[]>([]);          // [{ name, path, group }]
   const selectedMap = ref('');   // 下拉選的路徑,鏡射 imagePath
 
   // imagePath 變動(辨識自動切換 / 設定載入)時同步下拉選取

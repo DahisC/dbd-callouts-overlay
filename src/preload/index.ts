@@ -3,7 +3,6 @@ import { contextBridge, ipcRenderer } from 'electron';
 // 安全地把有限的 IPC 能力暴露給 Vue 畫面 (window.api)
 contextBridge.exposeInMainWorld('api', {
   // --- 控制台用 ---
-  pickImage: () => ipcRenderer.invoke('pick-image'),
   listMaps: () => ipcRenderer.invoke('list-maps'),
   selectMap: (path) => ipcRenderer.send('select-map', path),
   getSettings: () => ipcRenderer.invoke('get-settings'),
@@ -12,12 +11,11 @@ contextBridge.exposeInMainWorld('api', {
   setOpacity: (v) => ipcRenderer.send('set-opacity', v),
   setScale: (v) => ipcRenderer.send('set-scale', v),
   setClickThrough: (v) => ipcRenderer.send('set-click-through', v),
-  setOnlyDbd: (v) => ipcRenderer.send('set-only-dbd', v),
   setHideUnfocused: (v) => ipcRenderer.send('set-hide-unfocused', v),
-  resetPosition: () => ipcRenderer.send('reset-position'),
   minimizeControl: () => ipcRenderer.send('control-minimize'),
   quit: () => ipcRenderer.send('quit-app'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
+  openLogs: () => ipcRenderer.send('open-logs'),
   checkUpdate: () => ipcRenderer.send('check-update'),
   installUpdate: () => ipcRenderer.send('install-update'),
   onUpdateStatus: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),

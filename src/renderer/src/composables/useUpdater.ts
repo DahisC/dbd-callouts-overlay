@@ -3,7 +3,7 @@ import { ref, computed } from 'vue';
 // 自動更新:接收主程序推送的更新狀態,所有狀態(含下載進度、下載完成的安裝)
 // 都整合在單一按鈕上由本 composable 計算文字 / disabled / 點擊行為。
 export function useUpdater() {
-  const update = ref(null);   // { state, percent, version, message }
+  const update = ref<UpdateStatus | null>(null);   // { state, percent, version, message }
   window.api.onUpdateStatus((s) => { update.value = s; });
 
   // 各狀態對應的顯示文字

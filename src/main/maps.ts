@@ -11,10 +11,10 @@ function mapsDir() {
     : join(__dirname, '../../resources/maps');
 }
 
-// 掃描地圖資料夾(含子資料夾),回傳 [{ name, path, group }]
-// group = 直屬的子資料夾(地區)名稱;直接放在 maps 根目錄的圖 group 為 ''
-export function listMaps() {
-  const root = mapsDir();
+// 掃描指定資料夾(含子資料夾),回傳排序後的 [{ name, path, group }]
+// group = 直屬的子資料夾(地區)名稱;直接放在根目錄的圖 group 為 ''
+// 吃 root 參數、不依賴 electron,便於單元測試
+export function scanMaps(root) {
   const out = [];
   function walk(dir, group) {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -36,4 +36,9 @@ export function listMaps() {
     (a.group || '').localeCompare(b.group || '', 'zh-Hant') ||
     a.name.localeCompare(b.name, 'zh-Hant')
   );
+}
+
+// 掃描內建地圖資料夾
+export function listMaps() {
+  return scanMaps(mapsDir());
 }

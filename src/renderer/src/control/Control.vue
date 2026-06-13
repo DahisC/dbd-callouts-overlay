@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useSettings } from '../composables/useSettings';
 import { useMaps } from '../composables/useMaps';
@@ -44,6 +44,9 @@ function quit() { window.api.quit(); }
 
 // 地圖 callout 來源,用系統瀏覽器開啟
 function openMapSource() { window.api.openExternal('https://hens333.com/callouts/'); }
+
+// 開啟日誌資料夾(回報問題時方便附 log)
+function openLogs() { window.api.openLogs(); }
 </script>
 
 <template>
@@ -131,6 +134,11 @@ function openMapSource() { window.api.openExternal('https://hens333.com/callouts
         :class="isDownloaded ? 'ready' : (update && update.state)"
         :disabled="updBtnBusy"
         @click="onUpdateClick">{{ updBtnText }}</button>
+    </div>
+
+    <!-- 開啟日誌資料夾(回報問題時附 log 用)-->
+    <div class="logs-row">
+      <a class="link" @click="openLogs">開啟日誌資料夾</a>
     </div>
 
     <!-- 作者(左)與地圖 callout 來源(右),版本號移到標題列 -->
@@ -417,6 +425,19 @@ body {
 /* 狀態文字直接顯示在按鈕內,錯誤用琥珀色提示 */
 .upd-btn.error { color: #e0a23c; }
 .upd-btn.dev { color: var(--muted); }
+
+/* ===== 開啟日誌連結 ===== */
+.logs-row {
+  text-align: center;
+  font-size: 10.5px;
+}
+.logs-row .link {
+  color: #6c6d78;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  text-decoration: none;
+}
+.logs-row .link:hover { color: var(--text); text-decoration: underline; }
 
 /* ===== 作者署名(左)/ 地圖來源(右) ===== */
 .credit {
