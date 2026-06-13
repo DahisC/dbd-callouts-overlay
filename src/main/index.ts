@@ -1,9 +1,9 @@
-import { app, BrowserWindow, ipcMain, desktopCapturer, screen, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, shell } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize';
 import { listMaps } from './maps';
 import { clampToVisible } from './geometry';
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 import log from 'electron-log/main';
@@ -419,29 +419,45 @@ function sendGameState() {
   }
 }
 
-// 截圖上限寬度:OCR 只需地圖名那一行,不需原生解析度。等比縮到此寬度可大幅減少
-// GPU readback 的像素量,降低截圖瞬間與前景遊戲搶 GPU 造成的卡頓。
-// 若某些地圖名辨識變差,把這個值調高(設為原生寬度等同關閉縮小)。
-const CAPTURE_MAX_WIDTH = 1280;
+// 地圖名稱在畫面的相對位置(中央偏下那一塊),依此比例換算成實際像素矩形。
+// 之後用螢幕截圖校正:這四個值決定要截哪個矩形。
+const NAME_REGION = { x: 0.26, y: 0.796, w: 0.48, h: 0.043 };
 
-// 截全螢幕回傳 NativeImage(等比縮到 CAPTURE_MAX_WIDTH 以內)
-async function captureScreen() {
-  const display = screen.getPrimaryDisplay();
-  const sf = display.scaleFactor || 1;
-  const nativeW = Math.round(display.size.width * sf);
-  const nativeH = Math.round(display.size.height * sf);
-  const ratio = Math.min(1, CAPTURE_MAX_WIDTH / nativeW); // 只縮小、不放大
-  const width = Math.round(nativeW * ratio);
-  const height = Math.round(nativeH * ratio);
-  const sources = await desktopCapturer.getSources({
-    types: ['screen'],
-    thumbnailSize: { width, height }
+// 用 GDI(.NET CopyFromScreen)只截「地圖名矩形」,而非整張畫面。
+// 讀回的像素極少 → 避免整張畫面從 GPU 讀回造成的卡頓。回傳該矩形的 PNG buffer。
+// 注意:GDI 截圖在「獨佔全螢幕(exclusive fullscreen)」的遊戲可能截到黑畫面;
+//      DBD 用無邊框視窗(overlay 才蓋得上去)時可正常截取。
+function captureNameRegion(): Promise<Buffer> {
+  const d = screen.getPrimaryDisplay();
+  const sf = d.scaleFactor || 1;
+  const sw = Math.round(d.size.width * sf);
+  const sh = Math.round(d.size.height * sf);
+  const x = Math.round(d.bounds.x * sf + NAME_REGION.x * sw);
+  const y = Math.round(d.bounds.y * sf + NAME_REGION.y * sh);
+  const w = Math.max(1, Math.round(NAME_REGION.w * sw));
+  const h = Math.max(1, Math.round(NAME_REGION.h * sh));
+  const ps = `
+Add-Type -AssemblyName System.Drawing
+$bmp = New-Object System.Drawing.Bitmap ${w}, ${h}
+$g = [System.Drawing.Graphics]::FromImage($bmp)
+$g.CopyFromScreen(${x}, ${y}, 0, 0, $bmp.Size)
+$ms = New-Object System.IO.MemoryStream
+$bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+[Console]::Out.Write([Convert]::ToBase64String($ms.ToArray()))
+`;
+  const b64 = Buffer.from(ps, 'utf16le').toString('base64');
+  return new Promise((resolve, reject) => {
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-EncodedCommand', b64],
+      { windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
+      (err, stdout) => {
+        if (err) return reject(err);
+        console.log(`[capture] region ${w}x${h} @(${x},${y})`);
+        resolve(Buffer.from(String(stdout).trim(), 'base64'));
+      }
+    );
   });
-  if (!sources.length) throw new Error('no screen source found');
-  const img = sources[0].thumbnail;
-  const sz = img.getSize();
-  console.log(`[capture] screen captured ${sz.width}x${sz.height} (cap ${CAPTURE_MAX_WIDTH})`);
-  return img;
 }
 
 async function onTabPressed() {
@@ -456,8 +472,8 @@ async function onTabPressed() {
     }
     console.log(`[tab] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms`);
     await delay(CAPTURE_DELAY);
-    const img = await captureScreen();
-    const text = await recognizeMapName(img);
+    const regionPng = await captureNameRegion();
+    const text = await recognizeMapName(regionPng);
     const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
