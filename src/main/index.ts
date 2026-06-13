@@ -419,12 +419,20 @@ function sendGameState() {
   }
 }
 
-// 截全螢幕(原生解析度),回傳 NativeImage
+// 截圖上限寬度:OCR 只需地圖名那一行,不需原生解析度。等比縮到此寬度可大幅減少
+// GPU readback 的像素量,降低截圖瞬間與前景遊戲搶 GPU 造成的卡頓。
+// 若某些地圖名辨識變差,把這個值調高(設為原生寬度等同關閉縮小)。
+const CAPTURE_MAX_WIDTH = 1280;
+
+// 截全螢幕回傳 NativeImage(等比縮到 CAPTURE_MAX_WIDTH 以內)
 async function captureScreen() {
   const display = screen.getPrimaryDisplay();
   const sf = display.scaleFactor || 1;
-  const width = Math.round(display.size.width * sf);
-  const height = Math.round(display.size.height * sf);
+  const nativeW = Math.round(display.size.width * sf);
+  const nativeH = Math.round(display.size.height * sf);
+  const ratio = Math.min(1, CAPTURE_MAX_WIDTH / nativeW); // 只縮小、不放大
+  const width = Math.round(nativeW * ratio);
+  const height = Math.round(nativeH * ratio);
   const sources = await desktopCapturer.getSources({
     types: ['screen'],
     thumbnailSize: { width, height }
@@ -432,7 +440,7 @@ async function captureScreen() {
   if (!sources.length) throw new Error('no screen source found');
   const img = sources[0].thumbnail;
   const sz = img.getSize();
-  console.log(`[capture] screen captured ${sz.width}x${sz.height}`);
+  console.log(`[capture] screen captured ${sz.width}x${sz.height} (cap ${CAPTURE_MAX_WIDTH})`);
   return img;
 }
 
