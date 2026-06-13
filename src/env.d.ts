@@ -46,6 +46,7 @@ interface Api {
   minimizeControl(): void;
   quit(): void;
   openExternal(url: string): void;
+  openLogs(): void;
   checkUpdate(): void;
   installUpdate(): void;
   onUpdateStatus(cb: (s: UpdateStatus) => void): void;

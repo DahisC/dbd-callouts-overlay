@@ -15,7 +15,7 @@ log.transports.file.level = 'info';
 Object.assign(console, log.functions);
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
-import { join, extname } from 'path';
+import { join, extname, dirname } from 'path';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
@@ -273,6 +273,11 @@ ipcMain.on('set-click-through', (_e, v) => {
 // 用系統預設瀏覽器開啟外部連結(只允許 http/https,避免被塞危險協定)
 ipcMain.on('open-external', (_e, url) => {
   if (typeof url === 'string' && /^https?:\/\//i.test(url)) shell.openExternal(url);
+});
+
+// 在檔案總管開啟日誌資料夾(electron-log 實際寫入的目錄)
+ipcMain.on('open-logs', () => {
+  shell.openPath(dirname(log.transports.file.getFile().path));
 });
 
 ipcMain.on('quit-app', () => app.quit());
