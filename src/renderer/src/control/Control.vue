@@ -10,7 +10,7 @@ const clickThrough = ref(false);
 const hideWhenUnfocused = ref(true);
 const maps = ref([]);
 const selectedMap = ref('');
-const game = ref({ running: false, focused: false }); // 遊戲狀態
+const focused = ref(false); // DBD 是否為最前景視窗
 const version = ref('');
 const update = ref(null);   // 更新狀態 { state, percent, version, message }
 const isDev = import.meta.env.DEV;  // 開發模式(打包後為 false)
@@ -26,8 +26,7 @@ const currentMapName = computed(() => {
 // 依遊戲狀態給對應的顏色 / 標題 / 提示
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
-  if (!game.value.running) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  if (!game.value.focused) return { key: 'warn', title: '已暫停', hint: '遊戲處於背景狀態時會自動暫停偵測\n請切換到遊戲視窗' };
+  if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
   return { key: 'ok', title: '已就緒', hint: `按 Tab 開啟計分板以自動偵測地圖\n目前地圖：${currentMapName.value}` };
 });
 
@@ -48,7 +47,7 @@ onMounted(async () => {
 });
 
 window.api.onSettings(applySettings);
-window.api.onGameState((st) => { game.value = st; });
+window.api.onGameState((st) => { focused.value = !!st.focused; });
 window.api.onUpdateStatus((s) => { update.value = s; });
 
 // 更新狀態文字

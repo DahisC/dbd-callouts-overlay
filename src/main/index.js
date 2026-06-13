@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
-import { exec, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 
@@ -222,6 +222,7 @@ function createControlWindow() {
 
   controlWin.webContents.on('did-finish-load', () => {
     controlWin.webContents.send('settings', settings);
+    sendGameState(); // 載入時補送一次目前焦點狀態
   });
 
   controlWin.on('closed', () => { controlWin = null; });
@@ -392,6 +393,7 @@ function startForegroundMonitor() {
       if (focused !== dbdFocused) {
         dbdFocused = focused;
         applyOverlayVisibility(); // 焦點一變就即時顯示/隱藏(約 0.6s 內)
+        sendGameState();          // 同步控制台狀態
       }
     }
   });
@@ -406,29 +408,11 @@ function isDbdForeground() {
   return /DeadByDaylight/i.test(fgProcName);
 }
 
-// 檢查 DBD 程序是否正在執行(不論前景與否)
-function isDbdRunning() {
-  return new Promise((resolve) => {
-    exec(
-      'tasklist /FI "IMAGENAME eq DeadByDaylight-Win64-Shipping.exe" /NH',
-      { windowsHide: true },
-      (err, stdout) => resolve(!err && /DeadByDaylight/i.test(stdout))
-    );
-  });
-}
-
-// 輪詢遊戲狀態,推給控制台:{ running, focused }
-let gameStateTimer = null;
-function startGameStatePoll() {
-  const tick = async () => {
-    const focused = isDbdForeground();              // 前景就是 DBD(監看程序提供)
-    const running = focused ? true : await isDbdRunning();
-    if (controlWin && !controlWin.isDestroyed()) {
-      controlWin.webContents.send('game-state', { running, focused });
-    }
-  };
-  tick();
-  gameStateTimer = setInterval(tick, 2000);
+// 把目前焦點狀態推給控制台(由監看程序在焦點變化時、及控制台載入時呼叫)
+function sendGameState() {
+  if (controlWin && !controlWin.isDestroyed()) {
+    controlWin.webContents.send('game-state', { focused: dbdFocused });
+  }
 }
 
 // 截全螢幕(原生解析度),回傳 NativeImage
@@ -572,7 +556,6 @@ app.whenReady().then(() => {
   startForegroundMonitor();
   createOverlayWindow();
   createControlWindow();
-  startGameStatePoll();
   setupAutoUpdater();
 
   app.on('activate', () => {
@@ -586,7 +569,6 @@ app.whenReady().then(() => {
 app.on('will-quit', () => {
   quitting = true;
   try { uIOhook.stop(); } catch {}
-  if (gameStateTimer) clearInterval(gameStateTimer);
   if (fgProc) { try { fgProc.kill(); } catch {} }
   terminateWorker().catch(() => {});
 });
