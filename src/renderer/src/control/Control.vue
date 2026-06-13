@@ -13,6 +13,7 @@ const selectedMap = ref('');
 const game = ref({ running: false, focused: false }); // 遊戲狀態
 const version = ref('');
 const update = ref(null);   // 更新狀態 { state, percent, version, message }
+const isDev = import.meta.env.DEV;  // 開發模式(打包後為 false)
 
 // 目前地圖名稱(由選取/辨識的路徑推算)
 const currentMapName = computed(() => {
@@ -66,6 +67,9 @@ const updateText = computed(() => {
     default: return '';
   }
 });
+
+// 「檢查更新」按鈕內顯示的文字:有狀態就顯示狀態,否則顯示預設
+const checkBtnText = computed(() => updateText.value || '檢查更新');
 
 function checkUpdate() {
   update.value = { state: 'checking' };
@@ -149,6 +153,12 @@ function quit() { window.api.quit(); }
       <div class="dz-hint">{{ status.hint }}</div>
     </section>
 
+    <!-- OCR 除錯顯示(暫時)-->
+    <div v-if="ocr" class="ocr-debug" :class="{ err: ocr.error }">
+      <template v-if="ocr.error">OCR 錯誤：{{ ocr.error }}</template>
+      <template v-else>辨識「{{ ocr.text || '（空）' }}」→ {{ ocr.match }} ({{ (ocr.score || 0).toFixed(2) }}){{ ocr.switched ? ' ✓' : ' ✗' }}</template>
+    </div>
+
     <template v-if="enabled">
     <!-- 滑鼠穿透 -->
     <label class="toggle">
@@ -158,14 +168,20 @@ function quit() { window.api.quit(); }
 
     <!-- 大小 -->
     <section class="field">
-      <div class="field-head"><span class="cap">大小</span><span class="val">{{ Math.round(scale * 100) }}%</span></div>
+      <div class="field-head"><span class="cap">大小<span class="keys">
+        <kbd><svg viewBox="0 0 12 12"><path d="M6 3.0 L9.3 6.3 L7.2 6.3 L7.2 9.3 L4.8 9.3 L4.8 6.3 L2.7 6.3 Z" /></svg></kbd>
+        <kbd><svg viewBox="0 0 12 12"><path d="M6 9.0 L2.7 5.7 L4.8 5.7 L4.8 2.7 L7.2 2.7 L7.2 5.7 L9.3 5.7 Z" /></svg></kbd>
+      </span></span><span class="val">{{ Math.round(scale * 100) }}%</span></div>
       <input class="slider" type="range" min="0.1" max="1" step="0.01"
              v-model="scale" @input="onScale" :style="{ '--fill': scaleFill }" />
     </section>
 
     <!-- 透明度 -->
     <section class="field">
-      <div class="field-head"><span class="cap">透明度</span><span class="val">{{ Math.round(opacity * 100) }}%</span></div>
+      <div class="field-head"><span class="cap">透明度<span class="keys">
+        <kbd><svg viewBox="0 0 12 12"><path d="M3.0 6 L6.3 2.7 L6.3 4.8 L9.3 4.8 L9.3 7.2 L6.3 7.2 L6.3 9.3 Z" /></svg></kbd>
+        <kbd><svg viewBox="0 0 12 12"><path d="M9.0 6 L5.7 9.3 L5.7 7.2 L2.7 7.2 L2.7 4.8 L5.7 4.8 L5.7 2.7 Z" /></svg></kbd>
+      </span></span><span class="val">{{ Math.round(opacity * 100) }}%</span></div>
       <input class="slider" type="range" min="0.1" max="1" step="0.01"
              v-model="opacity" @input="onOpacity" :style="{ '--fill': opacityFill }" />
     </section>
@@ -180,14 +196,15 @@ function quit() { window.api.quit(); }
       <button
         v-else
         class="upd-btn"
+        :class="update && update.state"
         :disabled="update && (update.state === 'checking' || update.state === 'downloading')"
-        @click="checkUpdate">檢查更新</button>
-      <span v-if="updateText" class="upd-text" :class="update.state">{{ updateText }}</span>
+        @click="checkUpdate">{{ checkBtnText }}</button>
     </div>
 
     <footer class="credit">
       <span>Designed by <b>Pocky</b></span>
-      <span v-if="version" class="ver">v{{ version }}</span>
+      <span v-if="isDev" class="ver dev-tag">Develop</span>
+      <span v-else-if="version" class="ver">v{{ version }}</span>
     </footer>
     </div>
   </div>
@@ -327,6 +344,14 @@ body {
   line-height: 1.65;
   min-height: 3.3em;   /* 預留兩行高度,讓三種狀態版面一致 */
 }
+.ocr-debug {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+  line-height: 1.5;
+  padding: 0 2px;
+}
+.ocr-debug.err { color: #e0a23c; }
 
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(var(--c), 0.55); }
@@ -336,9 +361,33 @@ body {
 
 /* ===== 拉桿 ===== */
 .field { display: flex; flex-direction: column; gap: 11px; }
-.field-head { display: flex; justify-content: space-between; align-items: baseline; }
-.cap { font-size: 12.5px; color: var(--muted); letter-spacing: 0.5px; }
+.field-head { display: flex; justify-content: space-between; align-items: center; }
+.cap { display: inline-flex; align-items: center; font-size: 12.5px; color: var(--muted); letter-spacing: 0.5px; }
 .val { font-size: 12.5px; font-weight: 600; color: #c2c3cd; font-variant-numeric: tabular-nums; }
+
+/* 方向鍵提示鍵帽 */
+.keys { display: inline-flex; gap: 3px; margin-left: 7px; vertical-align: middle; }
+.keys kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  /* 立體底邊用陰影,不動到內容區,保持箭頭精準置中 */
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+.keys svg {
+  display: block;
+  width: 11px; height: 11px;
+}
+.keys svg path {
+  fill: #b6b7c2;
+  stroke: #b6b7c2;
+  stroke-width: 1;       /* 同色描邊 + 圓角讓實心箭頭的尖角圓潤一點 */
+  stroke-linejoin: round;
+}
 
 .slider {
   -webkit-appearance: none;
@@ -425,9 +474,9 @@ body {
 .upd-btn:disabled { opacity: 0.5; cursor: default; }
 .upd-btn.ready { background: #46d6a0; border-color: #46d6a0; color: #0d2a1f; font-weight: 700; }
 .upd-btn.ready:hover { background: #54e2ad; }
-.upd-text { font-size: 11px; color: var(--muted); }
-.upd-text.downloaded { color: #46d6a0; }
-.upd-text.error { color: #e0a23c; }
+/* 狀態文字直接顯示在按鈕內,錯誤用琥珀色提示 */
+.upd-btn.error { color: #e0a23c; }
+.upd-btn.dev { color: var(--muted); }
 
 /* ===== 作者署名 ===== */
 .credit {
@@ -441,4 +490,6 @@ body {
 }
 .credit b { font-weight: 700; color: #9a9ba6; }
 .credit .ver { color: #6c6d78; }
+/* 開發模式標記 */
+.credit .dev-tag { color: #e0a23c; font-weight: 700; letter-spacing: 0.5px; }
 </style>
