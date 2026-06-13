@@ -520,14 +520,10 @@ async function onTabPressed() {
     const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
-    const matchInfo = best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match';
-    if (switched) {
-      // 有切換才印完整辨識文字(這時才需要看原文)
-      console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ${matchInfo} [switched]`);
-    } else {
-      // 沒切換通常是雜訊辨識,不印整串雜訊,只留比對結果與分數,保持 log 乾淨
-      console.log(`[ocr] ${matchInfo} [skipped]`);
-    }
+    // 統一格式:截圖辨識到的文字 / 判斷相符的地圖名 [分數]
+    const recognized = text.replace(/\s+/g, ' ').trim() || '(空)';
+    const mapName = best ? best.map.name : '(無)';
+    console.log(`[ocr] ${recognized}/${mapName} [${(best ? best.score : 0).toFixed(2)}]`);
 
     if (switched) {
       settings.imagePath = best.map.path;
