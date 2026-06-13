@@ -1,8 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, desktopCapturer, screen } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize.js';
-import activeWin from 'active-win';
-import { exec } from 'child_process';
+import { spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
 
@@ -38,7 +37,7 @@ function listMaps() {
     if (!existsSync(root)) mkdirSync(root, { recursive: true });
     walk(root, '');
   } catch (e) {
-    console.error('掃描地圖資料夾失敗:', e);
+    console.error('[maps] failed to scan maps folder:', e);
   }
   return out.sort((a, b) =>
     (a.group || '').localeCompare(b.group || '', 'zh-Hant') ||
@@ -58,7 +57,8 @@ const DEFAULT_SETTINGS = {
   x: 0,               // overlay 左上角位置
   y: 0,
   clickThrough: false,   // 滑鼠是否穿透 overlay
-  onlyWhenDbdFocused: true // Tab 偵測只在 DBD 為最前景視窗時才觸發
+  onlyWhenDbdFocused: true, // Tab 偵測只在 DBD 為最前景視窗時才觸發
+  hideWhenUnfocused: true  // DBD 不在最前景時自動隱藏地圖
 };
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -78,7 +78,7 @@ function saveSettings() {
   try {
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
   } catch (e) {
-    console.error('儲存設定失敗:', e);
+    console.error('[settings] failed to save settings:', e);
   }
 }
 
@@ -94,7 +94,7 @@ function imageToDataUrl(path) {
     const mime = MIME[extname(path).toLowerCase()] || 'image/png';
     return `data:${mime};base64,${readFileSync(path).toString('base64')}`;
   } catch (e) {
-    console.error('讀取圖片失敗:', e);
+    console.error('[image] failed to read image:', e);
     return '';
   }
 }
@@ -131,10 +131,14 @@ function applyClickThrough() {
   overlayWin.setIgnoreMouseEvents(settings.clickThrough, { forward: true });
 }
 
-// 依啟用狀態顯示 / 隱藏 overlay 視窗
-function applyEnabled() {
+let dbdFocused = false; // 最近一次偵測到的 DBD 是否為最前景(供自動隱藏判斷)
+
+// 依啟用狀態 + 前景狀態顯示 / 隱藏 overlay 視窗
+function applyOverlayVisibility() {
   if (!overlayWin) return;
-  if (settings.enabled) {
+  // 啟用,且(未開自動隱藏 或 DBD 正在前景)才顯示
+  const shouldShow = settings.enabled && (!settings.hideWhenUnfocused || dbdFocused);
+  if (shouldShow) {
     overlayWin.showInactive(); // 顯示但不搶焦點
     overlayWin.setAlwaysOnTop(true, 'screen-saver');
   } else {
@@ -170,7 +174,7 @@ function createOverlayWindow() {
   overlayWin.webContents.on('did-finish-load', () => {
     pushImage();
     applyClickThrough();
-    applyEnabled();
+    applyOverlayVisibility();
   });
 
 }
@@ -218,6 +222,7 @@ function createControlWindow() {
 
   controlWin.webContents.on('did-finish-load', () => {
     controlWin.webContents.send('settings', settings);
+    sendGameState(); // 載入時補送一次目前焦點狀態
   });
 
   controlWin.on('closed', () => { controlWin = null; });
@@ -266,7 +271,13 @@ ipcMain.on('set-scale', (_e, v) => {
 
 ipcMain.on('set-enabled', (_e, v) => {
   settings.enabled = !!v;
-  applyEnabled();
+  applyOverlayVisibility();
+  saveSettings();
+});
+
+ipcMain.on('set-hide-unfocused', (_e, v) => {
+  settings.hideWhenUnfocused = !!v;
+  applyOverlayVisibility();
   saveSettings();
 });
 
@@ -345,58 +356,69 @@ let tabHeld = false;   // Tab 是否正被按住(用來忽略自動重複)
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// 判斷目前最前景視窗是不是 DBD
-async function isDbdForeground() {
-  try {
-    const w = await activeWin();
-    if (w) {
-      const hay = `${w.title} ${w.owner?.name || ''} ${w.owner?.path || ''}`
-        .toLowerCase().replace(/\s+/g, '');
-      if (hay.includes('deadbydaylight')) return true;
-      // active-win 抓到的是別的視窗 → 確實不是 DBD 前景
-      return false;
-    }
-    // active-win 抓不到視窗(DBD 受 EAC 保護 / 全螢幕等)→ 改判斷 DBD 是否在執行
-    return await isDbdRunning();
-  } catch (e) {
-    console.error('[FG] active-win failed:', e.message);
-    return await isDbdRunning(); // 偵測失敗也退而求其次用「是否在執行」
-  }
+// ===== 前景視窗監看 =====
+// active-win 在 Windows 沒有原生 binary(只附 macOS),一律回傳 null,無法區分焦點。
+// 改常駐一個 PowerShell:用 user32 的 GetForegroundWindow 取得最前景程序名,
+// 持續輸出給主程序。Add-Type 的一次性編譯成本只在啟動付一次,之後查詢極便宜。
+const FG_MONITOR_PS = `
+$ErrorActionPreference='SilentlyContinue'
+Add-Type -Name Fg -Namespace W -MemberDefinition @"
+[DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint p);
+"@
+while ($true) {
+  $p = 0
+  [W.Fg]::GetWindowThreadProcessId([W.Fg]::GetForegroundWindow(), [ref]$p) | Out-Null
+  $n = (Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName
+  [Console]::Out.WriteLine($n)
+  Start-Sleep -Milliseconds 600
 }
+`;
 
-// 檢查 DBD 程序是否正在執行(不論前景與否)
-function isDbdRunning() {
-  return new Promise((resolve) => {
-    exec(
-      'tasklist /FI "IMAGENAME eq DeadByDaylight-Win64-Shipping.exe" /NH',
-      { windowsHide: true },
-      (err, stdout) => resolve(!err && /DeadByDaylight/i.test(stdout))
-    );
+let fgProc = null;
+let fgProcName = '';   // 最近一次回報的最前景程序名(無 .exe)
+let quitting = false;
+
+function startForegroundMonitor() {
+  const b64 = Buffer.from(FG_MONITOR_PS, 'utf16le').toString('base64');
+  fgProc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', b64], { windowsHide: true });
+  console.log('[fg] foreground monitor started');
+  let buf = '';
+  fgProc.stdout.on('data', (chunk) => {
+    buf += chunk.toString();
+    const lines = buf.split(/\r?\n/);
+    buf = lines.pop();            // 留下尚未換行的殘段
+    for (const line of lines) {
+      fgProcName = line.trim();
+      const focused = isDbdForeground();
+      if (focused !== dbdFocused) {
+        dbdFocused = focused;
+        // 焦點變化是隱藏/顯示功能的關鍵事件,記錄目前前景程序名以便 debug
+        console.log(`[fg] focus changed: DBD=${focused} (foreground: ${fgProcName || 'unknown'})`);
+        applyOverlayVisibility(); // 焦點一變就即時顯示/隱藏(約 0.6s 內)
+        sendGameState();          // 同步控制台狀態
+      }
+    }
+  });
+  fgProc.on('exit', (code) => {
+    fgProc = null;
+    if (!quitting) {
+      console.warn(`[fg] monitor exited (code ${code}), restarting in 1s`);
+      setTimeout(startForegroundMonitor, 1000); // 非正常結束就重啟
+    }
   });
 }
 
-// 輪詢遊戲狀態,推給控制台:{ running, focused }
-let gameStateTimer = null;
-function startGameStatePoll() {
-  const tick = async () => {
-    const focused = await isDbdForeground();        // 前景就是 DBD
-    const running = focused ? true : await isDbdRunning();
-    if (controlWin && !controlWin.isDestroyed()) {
-      controlWin.webContents.send('game-state', { running, focused });
-    }
-  };
-  tick();
-  gameStateTimer = setInterval(tick, 2000);
+// 目前最前景視窗是不是 DBD(讀監看程序回報的程序名,DBD 為 DeadByDaylight-Win64-Shipping)
+function isDbdForeground() {
+  return /DeadByDaylight/i.test(fgProcName);
 }
 
-// 帶 500ms 快取的前景判斷(按住方向鍵時避免每次都去查)
-let fgCache = { t: 0, isDbd: false };
-async function isDbdForegroundCached() {
-  const now = Date.now();
-  if (now - fgCache.t < 500) return fgCache.isDbd;
-  fgCache.t = now;
-  fgCache.isDbd = await isDbdForeground();
-  return fgCache.isDbd;
+// 把目前焦點狀態推給控制台(由監看程序在焦點變化時、及控制台載入時呼叫)
+function sendGameState() {
+  if (controlWin && !controlWin.isDestroyed()) {
+    controlWin.webContents.send('game-state', { focused: dbdFocused });
+  }
 }
 
 // 截全螢幕(原生解析度),回傳 NativeImage
@@ -409,10 +431,10 @@ async function captureScreen() {
     types: ['screen'],
     thumbnailSize: { width, height }
   });
-  if (!sources.length) throw new Error('找不到螢幕來源');
+  if (!sources.length) throw new Error('no screen source found');
   const img = sources[0].thumbnail;
   const sz = img.getSize();
-  console.log(`[CAP] captured ${sz.width}x${sz.height}`);
+  console.log(`[capture] screen captured ${sz.width}x${sz.height}`);
   return img;
 }
 
@@ -422,20 +444,20 @@ async function onTabPressed() {
   capturing = true;
   try {
     tabCount++;
-    if (settings.onlyWhenDbdFocused && !(await isDbdForeground())) {
-      console.log(`[TAB] #${tabCount} skip: foreground is not DBD`);
+    if (settings.onlyWhenDbdFocused && !isDbdForeground()) {
+      console.log(`[tab] #${tabCount} skipped: DBD not in foreground`);
       return;
     }
-    console.log(`[TAB] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms...`);
+    console.log(`[tab] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms`);
     await delay(CAPTURE_DELAY);
     const img = await captureScreen();
     const text = await recognizeMapName(img);
     const best = matchMap(text, listMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
-    console.log(`[OCR] "${text.replace(/\s+/g, ' ').trim()}" -> ` +
+    console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ` +
       (best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match') +
-      (switched ? ' [switched]' : ' [skip]'));
+      (switched ? ' [switched]' : ' [skipped]'));
 
     if (switched) {
       settings.imagePath = best.map.path;
@@ -443,22 +465,8 @@ async function onTabPressed() {
       pushImage();        // overlay 自動切換
       notifyControl();    // 控制台下拉同步
     }
-
-    // 把辨識結果送到控制台顯示(避免終端機中文亂碼)
-    if (controlWin && !controlWin.isDestroyed()) {
-      controlWin.webContents.send('ocr-result', {
-        text: text.replace(/\s+/g, ' ').trim(),
-        match: best ? `${best.map.group} / ${best.map.name}` : '(無)',
-        score: best ? best.score : 0,
-        switched
-      });
-    }
   } catch (e) {
-    console.error('[OCR] failed:', e);
-    // 打包版看不到 console,把錯誤送到控制台顯示以便除錯
-    if (controlWin && !controlWin.isDestroyed()) {
-      controlWin.webContents.send('ocr-result', { error: String((e && e.message) || e) });
-    }
+    console.error('[ocr] recognition failed:', e);
   } finally {
     capturing = false;
   }
@@ -508,7 +516,7 @@ async function onArrowKey(keycode) {
   else if (keycode === UiohookKey.ArrowLeft) action = () => adjustOpacity(-STEP_OPACITY);
   if (!action) return;
   // 跟 Tab 一樣:只在 DBD 為前景時生效(桌面操作不受干擾)
-  if (settings.onlyWhenDbdFocused && !(await isDbdForegroundCached())) return;
+  if (settings.onlyWhenDbdFocused && !isDbdForeground()) return;
   action();
 }
 
@@ -527,9 +535,9 @@ function startKeyHook() {
   });
   try {
     uIOhook.start();
-    console.log('[TAB] uiohook started, listening for Tab (non-blocking).');
+    console.log('[hook] uiohook started, listening for Tab (non-blocking)');
   } catch (err) {
-    console.error('[TAB] uiohook start failed:', err);
+    console.error('[hook] uiohook failed to start:', err);
   }
 }
 // ============================================
@@ -537,9 +545,9 @@ function startKeyHook() {
 app.whenReady().then(() => {
   loadSettings();
   startKeyHook();
+  startForegroundMonitor();
   createOverlayWindow();
   createControlWindow();
-  startGameStatePoll();
   setupAutoUpdater();
 
   app.on('activate', () => {
@@ -551,8 +559,9 @@ app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
+  quitting = true;
   try { uIOhook.stop(); } catch {}
-  if (gameStateTimer) clearInterval(gameStateTimer);
+  if (fgProc) { try { fgProc.kill(); } catch {} }
   terminateWorker().catch(() => {});
 });
 

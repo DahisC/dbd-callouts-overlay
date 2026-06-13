@@ -7,10 +7,10 @@ const imagePath = ref('');
 const opacity = ref(0.5);
 const scale = ref(0.5);
 const clickThrough = ref(false);
-const ocr = ref(null);
+const hideWhenUnfocused = ref(true);
 const maps = ref([]);
 const selectedMap = ref('');
-const game = ref({ running: false, focused: false }); // 遊戲狀態
+const focused = ref(false); // DBD 是否為最前景視窗
 const version = ref('');
 const update = ref(null);   // 更新狀態 { state, percent, version, message }
 const isDev = import.meta.env.DEV;  // 開發模式(打包後為 false)
@@ -26,8 +26,7 @@ const currentMapName = computed(() => {
 // 依遊戲狀態給對應的顏色 / 標題 / 提示
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
-  if (!game.value.running) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  if (!game.value.focused) return { key: 'warn', title: '已暫停', hint: '遊戲處於背景狀態時會自動暫停偵測\n請切換到遊戲視窗' };
+  if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
   return { key: 'ok', title: '已就緒', hint: `按 Tab 開啟計分板以自動偵測地圖\n目前地圖：${currentMapName.value}` };
 });
 
@@ -48,8 +47,7 @@ onMounted(async () => {
 });
 
 window.api.onSettings(applySettings);
-window.api.onOcrResult((r) => { ocr.value = r; });
-window.api.onGameState((st) => { game.value = st; });
+window.api.onGameState((st) => { focused.value = !!st.focused; });
 window.api.onUpdateStatus((s) => { update.value = s; });
 
 // 更新狀態文字
@@ -68,9 +66,17 @@ const updateText = computed(() => {
   }
 });
 
-// 「檢查更新」按鈕內顯示的文字:有狀態就顯示狀態,否則顯示預設
-const checkBtnText = computed(() => updateText.value || '檢查更新');
+// 更新按鈕:所有狀態都整合在這一顆按鈕上
+const isDownloaded = computed(() => !!update.value && update.value.state === 'downloaded');
+// 按鈕文字:下載完成顯示安裝提示,其餘顯示狀態文字,沒狀態就顯示預設
+const updBtnText = computed(() => isDownloaded.value ? '重啟以安裝更新' : (updateText.value || '檢查更新'));
+// 檢查中 / 下載中時 disable,避免重複觸發
+const updBtnBusy = computed(() => !!update.value && (update.value.state === 'checking' || update.value.state === 'downloading'));
 
+function onUpdateClick() {
+  if (isDownloaded.value) installUpdate();
+  else checkUpdate();
+}
 function checkUpdate() {
   update.value = { state: 'checking' };
   window.api.checkUpdate();
@@ -94,6 +100,7 @@ function applySettings(s) {
   opacity.value = s.opacity ?? 0.5;
   scale.value = s.scale ?? 0.5;
   clickThrough.value = !!s.clickThrough;
+  hideWhenUnfocused.value = s.hideWhenUnfocused ?? true;
   selectedMap.value = s.imagePath || '';
 }
 
@@ -107,6 +114,7 @@ function onEnabled() { window.api.setEnabled(enabled.value); }
 function onOpacity() { window.api.setOpacity(Number(opacity.value)); }
 function onScale() { window.api.setScale(Number(scale.value)); }
 function onClickThrough() { window.api.setClickThrough(clickThrough.value); }
+function onHideUnfocused() { window.api.setHideUnfocused(hideWhenUnfocused.value); }
 function minimize() { window.api.minimizeControl(); }
 function quit() { window.api.quit(); }
 </script>
@@ -153,17 +161,17 @@ function quit() { window.api.quit(); }
       <div class="dz-hint">{{ status.hint }}</div>
     </section>
 
-    <!-- OCR 除錯顯示(暫時)-->
-    <div v-if="ocr" class="ocr-debug" :class="{ err: ocr.error }">
-      <template v-if="ocr.error">OCR 錯誤：{{ ocr.error }}</template>
-      <template v-else>辨識「{{ ocr.text || '（空）' }}」→ {{ ocr.match }} ({{ (ocr.score || 0).toFixed(2) }}){{ ocr.switched ? ' ✓' : ' ✗' }}</template>
-    </div>
-
     <template v-if="enabled">
     <!-- 滑鼠穿透 -->
     <label class="toggle">
       <span>滑鼠穿透</span>
       <input type="checkbox" v-model="clickThrough" @change="onClickThrough" /><i></i>
+    </label>
+
+    <!-- 不在前景時隱藏地圖 -->
+    <label class="toggle">
+      <span>只在遊戲時顯示地圖</span>
+      <input type="checkbox" v-model="hideWhenUnfocused" @change="onHideUnfocused" /><i></i>
     </label>
 
     <!-- 大小 -->
@@ -187,18 +195,13 @@ function quit() { window.api.quit(); }
     </section>
     </template>
 
-    <!-- 更新 -->
+    <!-- 更新:所有狀態(含下載進度、下載完成安裝)整合在同一顆按鈕 -->
     <div class="update">
       <button
-        v-if="update && update.state === 'downloaded'"
-        class="upd-btn ready"
-        @click="installUpdate">重啟以安裝更新</button>
-      <button
-        v-else
         class="upd-btn"
-        :class="update && update.state"
-        :disabled="update && (update.state === 'checking' || update.state === 'downloading')"
-        @click="checkUpdate">{{ checkBtnText }}</button>
+        :class="isDownloaded ? 'ready' : (update && update.state)"
+        :disabled="updBtnBusy"
+        @click="onUpdateClick">{{ updBtnText }}</button>
     </div>
 
     <footer class="credit">
@@ -344,15 +347,6 @@ body {
   line-height: 1.65;
   min-height: 3.3em;   /* 預留兩行高度,讓三種狀態版面一致 */
 }
-.ocr-debug {
-  font-size: 11px;
-  color: var(--muted);
-  word-break: break-all;
-  line-height: 1.5;
-  padding: 0 2px;
-}
-.ocr-debug.err { color: #e0a23c; }
-
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(var(--c), 0.55); }
   70% { box-shadow: 0 0 0 9px rgba(var(--c), 0); }
