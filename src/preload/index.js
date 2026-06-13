@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('api', {
   selectMap: (path) => ipcRenderer.send('select-map', path),
   getSettings: () => ipcRenderer.invoke('get-settings'),
   getVersion: () => ipcRenderer.invoke('get-version'),
+  setEnabled: (v) => ipcRenderer.send('set-enabled', v),
   setOpacity: (v) => ipcRenderer.send('set-opacity', v),
   setScale: (v) => ipcRenderer.send('set-scale', v),
   setClickThrough: (v) => ipcRenderer.send('set-click-through', v),

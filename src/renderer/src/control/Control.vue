@@ -2,6 +2,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue';
 
 // ===== 狀態與接線(保留供之後的介面綁定,目前畫面未使用)=====
+const enabled = ref(true);
 const imagePath = ref('');
 const opacity = ref(0.5);
 const scale = ref(0.5);
@@ -23,6 +24,7 @@ const currentMapName = computed(() => {
 
 // 依遊戲狀態給對應的顏色 / 標題 / 提示
 const status = computed(() => {
+  if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
   if (!game.value.running) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
   if (!game.value.focused) return { key: 'warn', title: '已暫停', hint: '遊戲處於背景狀態時會自動暫停偵測\n請切換到遊戲視窗' };
   return { key: 'ok', title: '已就緒', hint: `按 Tab 開啟計分板以自動偵測地圖\n目前地圖：${currentMapName.value}` };
@@ -83,6 +85,7 @@ const scaleFill = computed(() => `${((scale.value - 0.1) / 0.9) * 100}%`);
 
 function applySettings(s) {
   if (!s) return;
+  enabled.value = s.enabled ?? true;
   imagePath.value = s.imagePath || '';
   opacity.value = s.opacity ?? 0.5;
   scale.value = s.scale ?? 0.5;
@@ -96,6 +99,7 @@ function onSelectMap() {
     imagePath.value = selectedMap.value;
   }
 }
+function onEnabled() { window.api.setEnabled(enabled.value); }
 function onOpacity() { window.api.setOpacity(Number(opacity.value)); }
 function onScale() { window.api.setScale(Number(scale.value)); }
 function onClickThrough() { window.api.setClickThrough(clickThrough.value); }
@@ -119,6 +123,12 @@ function quit() { window.api.quit(); }
     </header>
 
     <div class="app">
+    <!-- 啟用 -->
+    <label class="toggle">
+      <span>啟用</span>
+      <input type="checkbox" v-model="enabled" @change="onEnabled" /><i></i>
+    </label>
+
     <!-- 虛線區塊:遊戲狀態提示 -->
     <section class="dashed" :class="status.key">
       <div class="ic-slot">
@@ -129,12 +139,17 @@ function quit() { window.api.quit(); }
           <rect x="5" y="5" width="4.5" height="14" rx="2.25" />
           <rect x="14.5" y="5" width="4.5" height="14" rx="2.25" />
         </svg>
+        <svg v-else-if="status.key === 'off'" class="ic ic-zzz" viewBox="0 0 24 24">
+          <path d="M6 12 H11 L6 17 H11" transform="rotate(-10 8.5 14.5)" />
+          <path d="M13 4 H21 L13 12 H21" transform="rotate(7 17 8)" />
+        </svg>
         <span v-else class="dot"></span>
       </div>
       <div class="dz-title">{{ status.title }}</div>
       <div class="dz-hint">{{ status.hint }}</div>
     </section>
 
+    <template v-if="enabled">
     <!-- 滑鼠穿透 -->
     <label class="toggle">
       <span>滑鼠穿透</span>
@@ -154,6 +169,7 @@ function quit() { window.api.quit(); }
       <input class="slider" type="range" min="0.1" max="1" step="0.01"
              v-model="opacity" @input="onOpacity" :style="{ '--fill': opacityFill }" />
     </section>
+    </template>
 
     <!-- 更新 -->
     <div class="update">
@@ -178,6 +194,14 @@ function quit() { window.api.quit(); }
 </template>
 
 <style>
+/* 子集化的 Noto Sans TC(可變字重,只含介面+地圖名用到的字)*/
+@font-face {
+  font-family: 'Noto Sans TC';
+  src: url('../assets/notosanstc-subset.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   --bg: #0d0e12;
   --text: #ecedf2;
@@ -187,6 +211,12 @@ function quit() { window.api.quit(); }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--bg); overflow: hidden; }
+/* 整個視窗禁止選取 / 複製文字 */
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
 
 /* ===== 自訂標題列 ===== */
 .titlebar {
@@ -244,6 +274,7 @@ html, body { margin: 0; background: var(--bg); overflow: hidden; }
   text-align: center;
   transition: border-color 0.35s, background 0.35s, color 0.35s;
 }
+.dashed.off    { --c: 138, 139, 152; } /* 灰 */
 .dashed.danger { --c: 224, 80, 77; }   /* 紅 */
 .dashed.warn   { --c: 230, 181, 63; }  /* 黃 */
 .dashed.ok     { --c: 70, 214, 160; }  /* 綠 */
@@ -273,6 +304,14 @@ html, body { margin: 0; background: var(--bg); overflow: hidden; }
   filter: drop-shadow(0 0 8px rgba(var(--c), 0.6));
 }
 .dashed .ic-pause { fill: rgb(var(--c)); stroke: none; }
+
+/* 未啟用:兩個大小遞增、角度各異的 z(睡覺 Zzz) */
+.dashed .ic-zzz {
+  fill: none;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .dz-title {
   font-size: 15px;

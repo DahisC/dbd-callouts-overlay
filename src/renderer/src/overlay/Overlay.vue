@@ -68,6 +68,8 @@ html, body, #app {
   height: 100%;
   background: transparent;
   overflow: hidden;
+  -webkit-user-select: none;
+  user-select: none;
 }
 .wrap {
   width: 100%;

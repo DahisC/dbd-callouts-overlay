@@ -13,7 +13,6 @@
     "release": "electron-vite build && electron-builder --win --publish always"
   },
   "dependencies": {
-    "@fontsource/noto-sans-tc": "^5.2.9",
     "active-win": "^8.2.1",
     "electron-updater": "^6.8.9",
     "tesseract.js": "^7.0.0",
@@ -45,10 +44,17 @@
     "publish": {
       "provider": "github",
       "owner": "DahisC",
-      "repo": "dbd-callouts-overlay"
+      "repo": "dbd-callouts-overlay",
+      "releaseType": "release"
     },
     "files": [
-      "out/**/*"
+      "out/**/*",
+      "!node_modules/tesseract.js-core/tesseract-core.wasm",
+      "!node_modules/tesseract.js-core/tesseract-core.wasm.js",
+      "!node_modules/tesseract.js-core/tesseract-core-simd.wasm",
+      "!node_modules/tesseract.js-core/tesseract-core-simd.wasm.js",
+      "!node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm",
+      "!node_modules/tesseract.js-core/tesseract-core-relaxedsimd.wasm.js"
     ],
     "extraResources": [
       {
