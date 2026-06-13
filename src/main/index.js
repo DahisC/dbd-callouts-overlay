@@ -37,7 +37,7 @@ function listMaps() {
     if (!existsSync(root)) mkdirSync(root, { recursive: true });
     walk(root, '');
   } catch (e) {
-    console.error('掃描地圖資料夾失敗:', e);
+    console.error('[maps] failed to scan maps folder:', e);
   }
   return out.sort((a, b) =>
     (a.group || '').localeCompare(b.group || '', 'zh-Hant') ||
@@ -78,7 +78,7 @@ function saveSettings() {
   try {
     writeFileSync(settingsPath(), JSON.stringify(settings, null, 2));
   } catch (e) {
-    console.error('儲存設定失敗:', e);
+    console.error('[settings] failed to save settings:', e);
   }
 }
 
@@ -94,7 +94,7 @@ function imageToDataUrl(path) {
     const mime = MIME[extname(path).toLowerCase()] || 'image/png';
     return `data:${mime};base64,${readFileSync(path).toString('base64')}`;
   } catch (e) {
-    console.error('讀取圖片失敗:', e);
+    console.error('[image] failed to read image:', e);
     return '';
   }
 }
@@ -382,6 +382,7 @@ let quitting = false;
 function startForegroundMonitor() {
   const b64 = Buffer.from(FG_MONITOR_PS, 'utf16le').toString('base64');
   fgProc = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', b64], { windowsHide: true });
+  console.log('[fg] foreground monitor started');
   let buf = '';
   fgProc.stdout.on('data', (chunk) => {
     buf += chunk.toString();
@@ -392,14 +393,19 @@ function startForegroundMonitor() {
       const focused = isDbdForeground();
       if (focused !== dbdFocused) {
         dbdFocused = focused;
+        // 焦點變化是隱藏/顯示功能的關鍵事件,記錄目前前景程序名以便 debug
+        console.log(`[fg] focus changed: DBD=${focused} (foreground: ${fgProcName || 'unknown'})`);
         applyOverlayVisibility(); // 焦點一變就即時顯示/隱藏(約 0.6s 內)
         sendGameState();          // 同步控制台狀態
       }
     }
   });
-  fgProc.on('exit', () => {
+  fgProc.on('exit', (code) => {
     fgProc = null;
-    if (!quitting) setTimeout(startForegroundMonitor, 1000); // 非正常結束就重啟
+    if (!quitting) {
+      console.warn(`[fg] monitor exited (code ${code}), restarting in 1s`);
+      setTimeout(startForegroundMonitor, 1000); // 非正常結束就重啟
+    }
   });
 }
 
@@ -425,10 +431,10 @@ async function captureScreen() {
     types: ['screen'],
     thumbnailSize: { width, height }
   });
-  if (!sources.length) throw new Error('找不到螢幕來源');
+  if (!sources.length) throw new Error('no screen source found');
   const img = sources[0].thumbnail;
   const sz = img.getSize();
-  console.log(`[CAP] captured ${sz.width}x${sz.height}`);
+  console.log(`[capture] screen captured ${sz.width}x${sz.height}`);
   return img;
 }
 
@@ -439,19 +445,19 @@ async function onTabPressed() {
   try {
     tabCount++;
     if (settings.onlyWhenDbdFocused && !isDbdForeground()) {
-      console.log(`[TAB] #${tabCount} skip: foreground is not DBD`);
+      console.log(`[tab] #${tabCount} skipped: DBD not in foreground`);
       return;
     }
-    console.log(`[TAB] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms...`);
+    console.log(`[tab] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms`);
     await delay(CAPTURE_DELAY);
     const img = await captureScreen();
     const text = await recognizeMapName(img);
     const best = matchMap(text, listMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
-    console.log(`[OCR] "${text.replace(/\s+/g, ' ').trim()}" -> ` +
+    console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ` +
       (best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match') +
-      (switched ? ' [switched]' : ' [skip]'));
+      (switched ? ' [switched]' : ' [skipped]'));
 
     if (switched) {
       settings.imagePath = best.map.path;
@@ -459,22 +465,8 @@ async function onTabPressed() {
       pushImage();        // overlay 自動切換
       notifyControl();    // 控制台下拉同步
     }
-
-    // 把辨識結果送到控制台顯示(避免終端機中文亂碼)
-    if (controlWin && !controlWin.isDestroyed()) {
-      controlWin.webContents.send('ocr-result', {
-        text: text.replace(/\s+/g, ' ').trim(),
-        match: best ? `${best.map.group} / ${best.map.name}` : '(無)',
-        score: best ? best.score : 0,
-        switched
-      });
-    }
   } catch (e) {
-    console.error('[OCR] failed:', e);
-    // 打包版看不到 console,把錯誤送到控制台顯示以便除錯
-    if (controlWin && !controlWin.isDestroyed()) {
-      controlWin.webContents.send('ocr-result', { error: String((e && e.message) || e) });
-    }
+    console.error('[ocr] recognition failed:', e);
   } finally {
     capturing = false;
   }
@@ -543,9 +535,9 @@ function startKeyHook() {
   });
   try {
     uIOhook.start();
-    console.log('[TAB] uiohook started, listening for Tab (non-blocking).');
+    console.log('[hook] uiohook started, listening for Tab (non-blocking)');
   } catch (err) {
-    console.error('[TAB] uiohook start failed:', err);
+    console.error('[hook] uiohook failed to start:', err);
   }
 }
 // ============================================

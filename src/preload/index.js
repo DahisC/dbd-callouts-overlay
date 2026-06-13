@@ -21,7 +21,6 @@ contextBridge.exposeInMainWorld('api', {
   installUpdate: () => ipcRenderer.send('install-update'),
   onUpdateStatus: (cb) => ipcRenderer.on('update-status', (_e, s) => cb(s)),
   onSettings: (cb) => ipcRenderer.on('settings', (_e, s) => cb(s)),
-  onOcrResult: (cb) => ipcRenderer.on('ocr-result', (_e, r) => cb(r)),
   onGameState: (cb) => ipcRenderer.on('game-state', (_e, st) => cb(st)),
   resizeControl: (height) => ipcRenderer.send('resize-control', height),
 
