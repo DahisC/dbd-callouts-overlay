@@ -6,6 +6,13 @@ import { clampToVisible } from './geometry';
 import { spawn } from 'child_process';
 import updaterPkg from 'electron-updater';
 const { autoUpdater } = updaterPkg;
+import log from 'electron-log/main';
+
+// 檔案日誌:把所有 console.* 接到 electron-log,同時寫進檔案與終端機。
+// 檔案位置:userData/logs/main.log(Windows: %AppData%\<app>\logs\),自動輪替。
+log.initialize();
+log.transports.file.level = 'info';
+Object.assign(console, log.functions);
 
 const MATCH_THRESHOLD = 0.45; // 相似度低於此值就不切換(避免誤判)
 import { join, extname } from 'path';

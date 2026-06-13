@@ -54,3 +54,10 @@ test('切「啟用」toggle 會寫進 settings.json', async () => {
     }, { message: 'settings.json 的 enabled 應變成 false', timeout: 8_000 })
     .toBe(false);
 });
+
+test('啟動後會寫入檔案日誌(electron-log)', async () => {
+  const logFile = join(userDataDir, 'logs', 'main.log');
+  await expect
+    .poll(() => existsSync(logFile), { message: 'logs/main.log 應被建立', timeout: 8_000 })
+    .toBe(true);
+});
