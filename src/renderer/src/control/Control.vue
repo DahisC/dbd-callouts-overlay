@@ -158,14 +158,20 @@ function quit() { window.api.quit(); }
 
     <!-- 大小 -->
     <section class="field">
-      <div class="field-head"><span class="cap">大小</span><span class="val">{{ Math.round(scale * 100) }}%</span></div>
+      <div class="field-head"><span class="cap">大小<span class="keys">
+        <kbd><svg viewBox="0 0 12 12"><path d="M6 3.0 L9.3 6.3 L7.2 6.3 L7.2 9.3 L4.8 9.3 L4.8 6.3 L2.7 6.3 Z" /></svg></kbd>
+        <kbd><svg viewBox="0 0 12 12"><path d="M6 9.0 L2.7 5.7 L4.8 5.7 L4.8 2.7 L7.2 2.7 L7.2 5.7 L9.3 5.7 Z" /></svg></kbd>
+      </span></span><span class="val">{{ Math.round(scale * 100) }}%</span></div>
       <input class="slider" type="range" min="0.1" max="1" step="0.01"
              v-model="scale" @input="onScale" :style="{ '--fill': scaleFill }" />
     </section>
 
     <!-- 透明度 -->
     <section class="field">
-      <div class="field-head"><span class="cap">透明度</span><span class="val">{{ Math.round(opacity * 100) }}%</span></div>
+      <div class="field-head"><span class="cap">透明度<span class="keys">
+        <kbd><svg viewBox="0 0 12 12"><path d="M3.0 6 L6.3 2.7 L6.3 4.8 L9.3 4.8 L9.3 7.2 L6.3 7.2 L6.3 9.3 Z" /></svg></kbd>
+        <kbd><svg viewBox="0 0 12 12"><path d="M9.0 6 L5.7 9.3 L5.7 7.2 L2.7 7.2 L2.7 4.8 L5.7 4.8 L5.7 2.7 Z" /></svg></kbd>
+      </span></span><span class="val">{{ Math.round(opacity * 100) }}%</span></div>
       <input class="slider" type="range" min="0.1" max="1" step="0.01"
              v-model="opacity" @input="onOpacity" :style="{ '--fill': opacityFill }" />
     </section>
@@ -336,9 +342,33 @@ body {
 
 /* ===== 拉桿 ===== */
 .field { display: flex; flex-direction: column; gap: 11px; }
-.field-head { display: flex; justify-content: space-between; align-items: baseline; }
-.cap { font-size: 12.5px; color: var(--muted); letter-spacing: 0.5px; }
+.field-head { display: flex; justify-content: space-between; align-items: center; }
+.cap { display: inline-flex; align-items: center; font-size: 12.5px; color: var(--muted); letter-spacing: 0.5px; }
 .val { font-size: 12.5px; font-weight: 600; color: #c2c3cd; font-variant-numeric: tabular-nums; }
+
+/* 方向鍵提示鍵帽 */
+.keys { display: inline-flex; gap: 3px; margin-left: 7px; vertical-align: middle; }
+.keys kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  /* 立體底邊用陰影,不動到內容區,保持箭頭精準置中 */
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+.keys svg {
+  display: block;
+  width: 11px; height: 11px;
+}
+.keys svg path {
+  fill: #b6b7c2;
+  stroke: #b6b7c2;
+  stroke-width: 1;       /* 同色描邊 + 圓角讓實心箭頭的尖角圓潤一點 */
+  stroke-linejoin: round;
+}
 
 .slider {
   -webkit-appearance: none;
