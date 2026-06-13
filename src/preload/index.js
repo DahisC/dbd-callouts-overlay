@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('api', {
   setScale: (v) => ipcRenderer.send('set-scale', v),
   setClickThrough: (v) => ipcRenderer.send('set-click-through', v),
   setOnlyDbd: (v) => ipcRenderer.send('set-only-dbd', v),
+  setHideUnfocused: (v) => ipcRenderer.send('set-hide-unfocused', v),
   resetPosition: () => ipcRenderer.send('reset-position'),
   minimizeControl: () => ipcRenderer.send('control-minimize'),
   quit: () => ipcRenderer.send('quit-app'),

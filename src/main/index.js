@@ -58,7 +58,8 @@ const DEFAULT_SETTINGS = {
   x: 0,               // overlay 左上角位置
   y: 0,
   clickThrough: false,   // 滑鼠是否穿透 overlay
-  onlyWhenDbdFocused: true // Tab 偵測只在 DBD 為最前景視窗時才觸發
+  onlyWhenDbdFocused: true, // Tab 偵測只在 DBD 為最前景視窗時才觸發
+  hideWhenUnfocused: true  // DBD 不在最前景時自動隱藏地圖
 };
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -131,10 +132,14 @@ function applyClickThrough() {
   overlayWin.setIgnoreMouseEvents(settings.clickThrough, { forward: true });
 }
 
-// 依啟用狀態顯示 / 隱藏 overlay 視窗
-function applyEnabled() {
+let dbdFocused = false; // 最近一次偵測到的 DBD 是否為最前景(供自動隱藏判斷)
+
+// 依啟用狀態 + 前景狀態顯示 / 隱藏 overlay 視窗
+function applyOverlayVisibility() {
   if (!overlayWin) return;
-  if (settings.enabled) {
+  // 啟用,且(未開自動隱藏 或 DBD 正在前景)才顯示
+  const shouldShow = settings.enabled && (!settings.hideWhenUnfocused || dbdFocused);
+  if (shouldShow) {
     overlayWin.showInactive(); // 顯示但不搶焦點
     overlayWin.setAlwaysOnTop(true, 'screen-saver');
   } else {
@@ -170,7 +175,7 @@ function createOverlayWindow() {
   overlayWin.webContents.on('did-finish-load', () => {
     pushImage();
     applyClickThrough();
-    applyEnabled();
+    applyOverlayVisibility();
   });
 
 }
@@ -266,7 +271,13 @@ ipcMain.on('set-scale', (_e, v) => {
 
 ipcMain.on('set-enabled', (_e, v) => {
   settings.enabled = !!v;
-  applyEnabled();
+  applyOverlayVisibility();
+  saveSettings();
+});
+
+ipcMain.on('set-hide-unfocused', (_e, v) => {
+  settings.hideWhenUnfocused = !!v;
+  applyOverlayVisibility();
   saveSettings();
 });
 
@@ -381,6 +392,8 @@ function startGameStatePoll() {
   const tick = async () => {
     const focused = await isDbdForeground();        // 前景就是 DBD
     const running = focused ? true : await isDbdRunning();
+    dbdFocused = focused;
+    applyOverlayVisibility();   // 依前景狀態自動顯示/隱藏地圖
     if (controlWin && !controlWin.isDestroyed()) {
       controlWin.webContents.send('game-state', { running, focused });
     }

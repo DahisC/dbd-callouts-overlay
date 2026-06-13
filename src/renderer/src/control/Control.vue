@@ -7,6 +7,7 @@ const imagePath = ref('');
 const opacity = ref(0.5);
 const scale = ref(0.5);
 const clickThrough = ref(false);
+const hideWhenUnfocused = ref(true);
 const ocr = ref(null);
 const maps = ref([]);
 const selectedMap = ref('');
@@ -94,6 +95,7 @@ function applySettings(s) {
   opacity.value = s.opacity ?? 0.5;
   scale.value = s.scale ?? 0.5;
   clickThrough.value = !!s.clickThrough;
+  hideWhenUnfocused.value = s.hideWhenUnfocused ?? true;
   selectedMap.value = s.imagePath || '';
 }
 
@@ -107,6 +109,7 @@ function onEnabled() { window.api.setEnabled(enabled.value); }
 function onOpacity() { window.api.setOpacity(Number(opacity.value)); }
 function onScale() { window.api.setScale(Number(scale.value)); }
 function onClickThrough() { window.api.setClickThrough(clickThrough.value); }
+function onHideUnfocused() { window.api.setHideUnfocused(hideWhenUnfocused.value); }
 function minimize() { window.api.minimizeControl(); }
 function quit() { window.api.quit(); }
 </script>
@@ -164,6 +167,12 @@ function quit() { window.api.quit(); }
     <label class="toggle">
       <span>滑鼠穿透</span>
       <input type="checkbox" v-model="clickThrough" @change="onClickThrough" /><i></i>
+    </label>
+
+    <!-- 不在前景時隱藏地圖 -->
+    <label class="toggle">
+      <span>離開遊戲時隱藏</span>
+      <input type="checkbox" v-model="hideWhenUnfocused" @change="onHideUnfocused" /><i></i>
     </label>
 
     <!-- 大小 -->
