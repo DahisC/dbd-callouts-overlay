@@ -174,7 +174,8 @@ function applyClickThrough() {
   overlayWin.setIgnoreMouseEvents(settings.clickThrough, { forward: true });
 }
 
-let dbdFocused = false; // 最近一次偵測到的 DBD 是否為最前景(供自動隱藏判斷)
+let dbdFocused = false; // 最近一次偵測到的 DBD 是否為最前景(供自動隱藏 / 截圖判斷)
+let dbdRunning = false; // DBD 程序是否存在(不論前景與否,供控制台狀態燈顯示「已偵測到遊戲」)
 
 // 依啟用狀態 + 前景狀態顯示 / 隱藏 overlay 視窗
 function applyOverlayVisibility() {
@@ -423,11 +424,17 @@ Add-Type -Name Fg -Namespace W -MemberDefinition @"
 [DllImport("user32.dll")] public static extern System.IntPtr GetForegroundWindow();
 [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr h, out uint p);
 "@
+$tick = 0; $run = 0
 while ($true) {
   $p = 0
   [W.Fg]::GetWindowThreadProcessId([W.Fg]::GetForegroundWindow(), [ref]$p) | Out-Null
   $n = (Get-Process -Id $p -ErrorAction SilentlyContinue).ProcessName
-  [Console]::Out.WriteLine($n)
+  # 前景就是 DBD → 必在執行,免列舉;否則每 5 拍(約 3s)才列舉一次程序清單,
+  # 因為「遊戲開/關」是罕見事件,不需要每 0.6s 都掃。
+  if ($n -like 'DeadByDaylight*') { $run = 1 }
+  elseif ($tick % 5 -eq 0) { $run = if (Get-Process -Name 'DeadByDaylight*' -ErrorAction SilentlyContinue) { 1 } else { 0 } }
+  [Console]::Out.WriteLine("$n|$run")  # 前景程序名|DBD是否在執行
+  $tick++
   Start-Sleep -Milliseconds 600
 }
 `;
@@ -446,15 +453,24 @@ function startForegroundMonitor() {
     const lines = buf.split(/\r?\n/);
     buf = lines.pop();            // 留下尚未換行的殘段
     for (const line of lines) {
-      fgProcName = line.trim();
+      const [fg, run] = line.split('|');
+      fgProcName = (fg || '').trim();
       const focused = isDbdForeground();
+      const running = run !== undefined ? run.trim() === '1' : focused;
+      let changed = false;
       if (focused !== dbdFocused) {
         dbdFocused = focused;
         // 焦點變化是隱藏/顯示功能的關鍵事件,記錄目前前景程序名以便 debug
         console.log(`[fg] focus changed: DBD=${focused} (foreground: ${fgProcName || 'unknown'})`);
         applyOverlayVisibility(); // 焦點一變就即時顯示/隱藏(約 0.6s 內)
-        sendGameState();          // 同步控制台狀態
+        changed = true;
       }
+      if (running !== dbdRunning) {
+        dbdRunning = running;     // 程序存在與否只影響狀態燈,不碰顯示/截圖
+        console.log(`[proc] DBD running=${running}`);
+        changed = true;
+      }
+      if (changed) sendGameState(); // 同步控制台狀態
     }
   });
   fgProc.on('exit', (code) => {
@@ -474,7 +490,7 @@ function isDbdForeground() {
 // 把目前焦點狀態推給控制台(由監看程序在焦點變化時、及控制台載入時呼叫)
 function sendGameState() {
   if (controlWin && !controlWin.isDestroyed()) {
-    controlWin.webContents.send('game-state', { focused: dbdFocused });
+    controlWin.webContents.send('game-state', { focused: dbdFocused, running: dbdRunning });
   }
 }
 

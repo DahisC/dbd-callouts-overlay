@@ -62,8 +62,8 @@ const { currentMapName } = useMaps(imagePath);
 // 自動更新（狀態 / 按鈕文字 / 點擊）
 const { update, isDownloaded, updBtnText, updBtnBusy, onUpdateClick } = useUpdater();
 
-// DBD 前景狀態
-const { focused } = useGameStatus();
+// DBD 狀態:focused 供截圖/隱藏(主程序用),running 供狀態燈持續顯示
+const { running } = useGameStatus();
 
 // 視窗高度自動貼合內容
 useAutoFit();
@@ -75,8 +75,8 @@ onMounted(async () => { version.value = await window.api.getVersion(); });
 // 依啟用 / 前景狀態給對應的顏色 / 標題 / 提示
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
-  if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  return { key: 'ok', title: '已就緒', hint: `進入遊戲後按 Tab 開啟計分板，再按 F 擷取地圖名\n目前地圖：${currentMapName.value}` };
+  if (!running.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
+  return { key: 'ok', title: '已偵測到遊戲', hint: `進入遊戲後按 Tab 開啟計分板，再按 F 擷取地圖名\n目前地圖：${currentMapName.value}` };
 });
 
 // 視窗控制

@@ -33,7 +33,8 @@ interface UpdateStatus {
 }
 
 interface GameState {
-  focused: boolean;
+  focused: boolean; // DBD 是否為最前景視窗(隱藏 / 截圖判斷)
+  running: boolean; // DBD 程序是否存在(狀態燈持續顯示「已偵測到遊戲」)
 }
 
 // preload 經 contextBridge 暴露到 window.api 的介面
