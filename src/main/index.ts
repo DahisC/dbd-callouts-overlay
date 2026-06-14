@@ -261,7 +261,7 @@ ipcMain.on('drag-end', () => {
 
 function createControlWindow() {
   controlWin = new BrowserWindow({
-    width: 360,
+    width: 410,
     height: 200,
     useContentSize: true,   // 寬高指的是內容區,方便依內容貼合
     title: 'DBD Callouts Overlay',
