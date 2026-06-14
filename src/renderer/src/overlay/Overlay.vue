@@ -18,9 +18,18 @@ const { hud, hudShow } = useHud();
 // 自訂拖曳(回傳的 onMouseDown 綁在容器上)
 const { onMouseDown } = useOverlayDrag();
 
-// 擷取讀取效果:主程序通知擷取中 → 地圖變暗 + 轉圈圈
+// 擷取回饋:擷取中 → 變暗+轉圈圈;成功/失敗 → 閃綠/紅邊框
 const capturing = ref(false);
-window.api.onCaptureStatus((on) => { capturing.value = on; });
+const flash = ref(''); // '' | 'ok' | 'fail'
+let flashTimer: ReturnType<typeof setTimeout> | null = null;
+window.api.onCaptureStatus((state) => {
+  capturing.value = state === 'capturing';
+  if (state === 'success' || state === 'fail') {
+    flash.value = state === 'success' ? 'ok' : 'fail';
+    if (flashTimer) clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { flash.value = ''; }, 1000);
+  }
+});
 </script>
 
 <template>
@@ -30,6 +39,8 @@ window.api.onCaptureStatus((on) => { capturing.value = on; });
     <div class="hud" :class="{ show: hudShow }">{{ hud }}</div>
     <!-- 擷取中:遮罩 + 轉圈圈 -->
     <div v-if="capturing" class="cap-mask"><div class="spinner"></div></div>
+    <!-- 結果:閃綠/紅邊框 -->
+    <div v-if="flash" class="flash" :class="flash"></div>
   </div>
 </template>
 
@@ -118,5 +129,22 @@ img {
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* 結果邊框閃爍:成功綠、失敗紅 */
+.flash {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border: 3px solid;
+  border-radius: 4px;
+  box-sizing: border-box;
+  animation: flash-blink 1s ease-out forwards;
+}
+.flash.ok { border-color: #46d6a0; box-shadow: inset 0 0 14px rgba(70, 214, 160, 0.6); }
+.flash.fail { border-color: #e0322f; box-shadow: inset 0 0 14px rgba(224, 50, 47, 0.6); }
+@keyframes flash-blink {
+  0%, 40%, 80% { opacity: 1; }
+  20%, 60%, 100% { opacity: 0; }
 }
 </style>

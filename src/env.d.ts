@@ -61,7 +61,7 @@ interface Api {
   onSettings(cb: (s: Settings) => void): void;
   onGameState(cb: (st: GameState) => void): void;
   resizeControl(height: number): void;
-  onCaptureStatus(cb: (on: boolean) => void): void;
+  onCaptureStatus(cb: (state: 'capturing' | 'success' | 'fail') => void): void;
   // overlay
   onSetImage(cb: (dataUrl: string) => void): void;
   onShowHud(cb: (text: string) => void): void;

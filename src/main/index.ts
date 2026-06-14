@@ -286,10 +286,10 @@ function createControlWindow() {
   controlWin.on('closed', () => { controlWin = null; });
 }
 
-// 擷取讀取效果:通知 overlay 顯示/隱藏遮罩 + 轉圈圈
-function showCaptureStatus(on) {
+// 擷取回饋:通知 overlay。'capturing' 顯示遮罩+轉圈圈;'success'/'fail' 閃綠/紅邊框
+function showCaptureStatus(state) {
   if (overlayWin && !overlayWin.isDestroyed()) {
-    overlayWin.webContents.send('capture-status', on);
+    overlayWin.webContents.send('capture-status', state);
   }
 }
 
@@ -541,7 +541,7 @@ async function onCaptureKey() {
       return;
     }
     console.log(`[key] ${keyName} detected (#${captureCount}), capturing in ${CAPTURE_DELAY}ms`);
-    showCaptureStatus(true); // 地圖變暗 + 轉圈圈
+    showCaptureStatus('capturing'); // 地圖變暗 + 轉圈圈
     await delay(CAPTURE_DELAY);
     const regionPng = await captureNameRegion();
     const { text, image } = await recognizeMapName(regionPng);
@@ -559,12 +559,15 @@ async function onCaptureKey() {
       saveSettings();
       pushImage();        // overlay 自動切換
       notifyControl();    // 控制台下拉同步
+      showCaptureStatus('success'); // 收起遮罩、閃綠邊框
+    } else {
+      showCaptureStatus('fail');     // 收起遮罩、閃紅邊框
     }
   } catch (e) {
     console.error('[ocr] recognition failed:', e);
+    showCaptureStatus('fail');
   } finally {
     capturing = false;
-    showCaptureStatus(false); // 收起遮罩
   }
 }
 
