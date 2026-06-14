@@ -1,19 +1,30 @@
 name: Release
 
-# 推上 v* 開頭的 tag 時自動打包並發佈草稿 release
+# 改為「按鈕觸發」(Actions 頁面的 Run workflow,或 gh workflow run)。
+# 版號不再手動輸入:CI 讀目前最新的 tag,依你選的 patch/minor/major 自動遞增,
+# 從根本避免手打版號出錯(例如把 0.3.1 打成 3.0.1 污染更新通道)。
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: '版本遞增類型(由目前最新版自動往上算)'
+        type: choice
+        options:
+          - patch   # 修正:0.3.1 -> 0.3.2
+          - minor   # 次版:0.3.1 -> 0.4.0
+          - major   # 主版:0.3.1 -> 1.0.0
+        default: patch
 
 jobs:
   release:
-    runs-on: windows-latest      # 有原生模組(uiohook-napi/active-win),必須用 Windows
+    runs-on: windows-latest      # 有原生模組(uiohook-napi),必須用 Windows
     permissions:
-      contents: write            # 允許建立 release
+      contents: write            # 允許建立 tag / release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0         # 需要完整 tag 歷史來推算版號
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -21,16 +32,43 @@ jobs:
           node-version: 20
           cache: npm
 
+      # 以「目前最新的 v* tag」為基準,依輸入的 bump 算出下一版,寫進 package.json。
+      # 全程不手打數字;package.json 的版本只在 build 當下被設定,不另外 commit。
+      - name: Compute next version
+        id: ver
+        shell: bash
+        run: |
+          # 以遠端 tag 為準(自動更新通道看的就是遠端 release/tag),避免本機殘留 tag 干擾
+          latest=$(git ls-remote --tags --refs origin 'v*' | awk -F/ '{print $NF}' | sort -V | tail -n1)
+          base=${latest#v}
+          [ -z "$base" ] && base=0.0.0
+          npm version "$base" --no-git-tag-version --allow-same-version >/dev/null
+          npm version "${{ inputs.bump }}" --no-git-tag-version >/dev/null
+          next=$(node -p "require('./package.json').version")
+          echo "Base (latest tag): ${latest:-<none>}  ->  Next: v$next"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          echo "tag=v$next" >> "$GITHUB_OUTPUT"
+
+      # 保險:新 tag 不得已存在(理論上往上遞增不會撞,但仍擋一道)
+      - name: Guard against existing tag
+        shell: bash
+        run: |
+          if git ls-remote --tags origin "refs/tags/${{ steps.ver.outputs.tag }}" | grep -q .; then
+            echo "::error::Tag ${{ steps.ver.outputs.tag }} already exists — aborting."
+            exit 1
+          fi
+
+      # 先建立並推送 tag(與既有可運作流程一致:tag 先存在,electron-builder 再附上 release)
+      - name: Create & push tag
+        shell: bash
+        run: |
+          git tag "${{ steps.ver.outputs.tag }}"
+          git push origin "${{ steps.ver.outputs.tag }}"
+
       - name: Install deps
         run: npm ci
 
-      # 把 tag 名稱(去掉開頭的 v)寫進 package.json 的 version
-      # 例如 tag v0.0.2 -> version 0.0.2,不另外建 commit/tag
-      - name: Set version from tag
-        shell: bash
-        run: npm version "${GITHUB_REF_NAME#v}" --no-git-tag-version --allow-same-version
-
-      - name: Build & publish (draft)
+      - name: Build & publish
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}   # CI 內建,免自己設 token
         run: npm run release
