@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, screen, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, shell, dialog } from 'electron';
 import { uIOhook, UiohookKey } from 'uiohook-napi';
 import { recognizeMapName, matchMap, terminateWorker } from './recognize';
 import { listMaps } from './maps';
@@ -309,7 +309,30 @@ ipcMain.on('set-hide-unfocused', (_e, v) => {
   saveSettings();
 });
 
-ipcMain.on('set-debug', (_e, v) => {
+ipcMain.on('set-debug', async (_e, v) => {
+  // 開啟前先跳說明對話框取得同意;取消則還原開關
+  if (v) {
+    const { response } = await dialog.showMessageBox(controlWin ?? undefined, {
+      type: 'info',
+      buttons: ['開啟', '取消'],
+      defaultId: 0,
+      cancelId: 1,
+      title: '除錯模式',
+      message: '開啟除錯模式?',
+      detail:
+        '為了協助排查地圖辨識問題,開啟後會在本機儲存:\n\n' +
+        '• 截圖:每次按 Tab 時,只截畫面「底部中央」那一條(用來辨識地圖名),不含其他畫面內容\n' +
+        '• 日誌:程式運作紀錄(OCR 結果、焦點變化等文字)\n\n' +
+        '儲存位置:本機 userData\\debug 資料夾,僅存在你的電腦,不會上傳到任何地方。\n' +
+        '保留多久:只在除錯模式開啟期間保留;日誌只留當天。\n' +
+        '如何清除:關閉除錯模式會自動清空 logs 與 screenshots 兩個資料夾。'
+    });
+    if (response !== 0) {
+      settings.debug = false;
+      notifyControl(); // 取消 → 把設定推回控制台,讓開關還原
+      return;
+    }
+  }
   settings.debug = !!v;
   applyDebug(settings.debug); // 開→啟用日誌/截圖;關→停寫並清空 logs/screenshots
   saveSettings();
