@@ -76,8 +76,23 @@ const DEFAULT_SETTINGS = {
   clickThrough: false,   // 滑鼠是否穿透 overlay
   onlyWhenDbdFocused: true, // F 偵測只在 DBD 為最前景視窗時才觸發
   hideWhenUnfocused: true, // DBD 不在最前景時自動隱藏地圖
-  debug: false             // debug 模式:保留檔案日誌與每次截圖
+  debug: false,            // debug 模式:保留檔案日誌與每次截圖
+  // 可自訂熱鍵(值為 uiohook 的按鍵名稱)
+  keys: {
+    capture: 'F',            // 擷取地圖名
+    sizeUp: 'ArrowUp',       // 放大
+    sizeDown: 'ArrowDown',   // 縮小
+    opacityUp: 'ArrowRight', // 提高不透明度
+    opacityDown: 'ArrowLeft' // 降低不透明度
+  }
 };
+
+// 可重新綁定的動作清單
+const KEY_ACTIONS = ['capture', 'sizeUp', 'sizeDown', 'opacityUp', 'opacityDown'];
+// uiohook 按鍵碼 → 名稱(供重新綁定時把按到的鍵存成名稱)
+const KEY_NAMES = Object.fromEntries(
+  Object.entries(UiohookKey).map(([name, code]) => [code, name])
+);
 
 let settings = { ...DEFAULT_SETTINGS };
 let overlayWin = null;
@@ -90,6 +105,8 @@ function loadSettings() {
   } catch {
     settings = { ...DEFAULT_SETTINGS };
   }
+  // keys 是巢狀物件,補上舊設定缺少的動作(淺層 merge 不會自動補)
+  settings.keys = { ...DEFAULT_SETTINGS.keys, ...(settings.keys || {}) };
 }
 
 function saveSettings() {
@@ -577,34 +594,56 @@ function adjustOpacity(delta) {
   scheduleSave();
 }
 
-async function onArrowKey(keycode) {
+// 大小 / 透明度微調鍵(讀自訂設定)
+async function onAdjustKey(keycode) {
+  const k = settings.keys;
   let action = null;
-  if (keycode === UiohookKey.ArrowUp) action = () => adjustScale(+STEP_SCALE);
-  else if (keycode === UiohookKey.ArrowDown) action = () => adjustScale(-STEP_SCALE);
-  else if (keycode === UiohookKey.ArrowRight) action = () => adjustOpacity(+STEP_OPACITY);
-  else if (keycode === UiohookKey.ArrowLeft) action = () => adjustOpacity(-STEP_OPACITY);
+  if (keycode === UiohookKey[k.sizeUp]) action = () => adjustScale(+STEP_SCALE);
+  else if (keycode === UiohookKey[k.sizeDown]) action = () => adjustScale(-STEP_SCALE);
+  else if (keycode === UiohookKey[k.opacityUp]) action = () => adjustOpacity(+STEP_OPACITY);
+  else if (keycode === UiohookKey[k.opacityDown]) action = () => adjustOpacity(-STEP_OPACITY);
   if (!action) return;
   // 跟截圖鍵一樣:只在 DBD 為前景時生效(桌面操作不受干擾)
   if (settings.onlyWhenDbdFocused && !isDbdForeground()) return;
   action();
 }
 
+// 重新綁定:有值時,下一個按鍵就設為該動作的新熱鍵(Esc 取消)
+let rebindAction: string | null = null;
+ipcMain.on('start-rebind', (_e, action) => {
+  if (KEY_ACTIONS.includes(action)) rebindAction = action;
+});
+ipcMain.on('cancel-rebind', () => {
+  rebindAction = null;
+  notifyControl();
+});
+
 function startKeyHook() {
   uIOhook.on('keydown', (e) => {
-    if (e.keycode === UiohookKey.F) {
+    // 重新綁定模式:攔下這個按鍵當作新熱鍵,不觸發原動作
+    if (rebindAction) {
+      if (e.keycode !== UiohookKey.Escape) {
+        const name = KEY_NAMES[e.keycode];
+        if (name) { settings.keys[rebindAction] = name; saveSettings(); }
+      }
+      rebindAction = null;
+      notifyControl(); // 把更新後的 keys 推回控制台
+      return;
+    }
+    if (e.keycode === UiohookKey[settings.keys.capture]) {
       if (keyHeld) return;   // 按住期間的重複 keydown,略過
       keyHeld = true;
       onCaptureKey();
       return;
     }
-    onArrowKey(e.keycode);   // 方向鍵微調(按住會持續調整)
+    onAdjustKey(e.keycode);   // 大小 / 透明度微調(按住會持續調整)
   });
   uIOhook.on('keyup', (e) => {
-    if (e.keycode === UiohookKey.F) keyHeld = false;
+    if (e.keycode === UiohookKey[settings.keys.capture]) keyHeld = false;
   });
   try {
     uIOhook.start();
-    console.log('[hook] uiohook started, listening for F (non-blocking)');
+    console.log('[hook] uiohook started (non-blocking)');
   } catch (err) {
     console.error('[hook] uiohook failed to start:', err);
   }

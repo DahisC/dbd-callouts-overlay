@@ -19,7 +19,11 @@ interface Settings {
   onlyWhenDbdFocused: boolean;
   hideWhenUnfocused: boolean;
   debug: boolean;
+  keys: KeyBinds;
 }
+
+type KeyAction = 'capture' | 'sizeUp' | 'sizeDown' | 'opacityUp' | 'opacityDown';
+type KeyBinds = Record<KeyAction, string>;
 
 interface UpdateStatus {
   state: 'checking' | 'available' | 'downloading' | 'downloaded' | 'latest' | 'dev' | 'error';
@@ -45,6 +49,8 @@ interface Api {
   setClickThrough(v: boolean): void;
   setHideUnfocused(v: boolean): void;
   setDebug(v: boolean): void;
+  startRebind(action: KeyAction): void;
+  cancelRebind(): void;
   minimizeControl(): void;
   quit(): void;
   openExternal(url: string): void;

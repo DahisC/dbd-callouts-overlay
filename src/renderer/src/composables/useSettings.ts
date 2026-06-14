@@ -10,6 +10,10 @@ export function useSettings() {
   const clickThrough = ref(false);
   const hideWhenUnfocused = ref(true);
   const debug = ref(false);
+  const keys = ref<KeyBinds>({
+    capture: 'F', sizeUp: 'ArrowUp', sizeDown: 'ArrowDown',
+    opacityUp: 'ArrowRight', opacityDown: 'ArrowLeft'
+  });
 
   // 把主程序送來的設定套用到本地 ref(載入時與之後變動時都會呼叫)
   function apply(s) {
@@ -21,6 +25,7 @@ export function useSettings() {
     clickThrough.value = !!s.clickThrough;
     hideWhenUnfocused.value = s.hideWhenUnfocused ?? true;
     debug.value = !!s.debug;
+    if (s.keys) keys.value = { ...keys.value, ...s.keys };
   }
 
   window.api.onSettings(apply);
@@ -38,7 +43,7 @@ export function useSettings() {
   const scaleFill = computed(() => `${((scale.value - 0.1) / 0.9) * 100}%`);
 
   return {
-    enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug,
+    enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug, keys,
     opacityFill, scaleFill,
     onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
   };

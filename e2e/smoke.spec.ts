@@ -78,3 +78,14 @@ test('開啟 Debug 後才會寫入檔案日誌', async () => {
     .poll(hasLog, { message: '開啟除錯後 logs/ 應出現 YYYY-MM-DD.log', timeout: 8_000 })
     .toBe(true);
 });
+
+test('點齒輪開啟熱鍵設定，顯示 5 個可綁定熱鍵', async () => {
+  const control = await windowByName('control');
+  await control.locator('.tb-btn[aria-label="設定"]').click();
+  await expect(control.locator('.modal-title', { hasText: '熱鍵設定' })).toBeVisible();
+  await expect(control.locator('.kb-row')).toHaveCount(5);
+  // 預設擷取鍵顯示 F
+  await expect(
+    control.locator('.kb-row', { hasText: '擷取地圖名' }).locator('.kb-key')
+  ).toHaveText('F');
+});

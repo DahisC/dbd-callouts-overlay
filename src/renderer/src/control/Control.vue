@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useSettings } from '../composables/useSettings';
 import { useMaps } from '../composables/useMaps';
 import { useUpdater } from '../composables/useUpdater';
@@ -10,10 +10,36 @@ const isDev = import.meta.env.DEV;  // 開發模式（打包後為 false)
 
 // 外觀 / 行為設定（啟用、透明度、大小、滑鼠穿透、只在遊戲時顯示）
 const {
-  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug,
+  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug, keys,
   opacityFill, scaleFill,
   onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
 } = useSettings();
+
+// ===== 熱鍵設定 =====
+const showSettings = ref(false);
+const rebindingAction = ref<string | null>(null); // 正在等待按鍵的動作
+const keyActions = [
+  { action: 'capture', label: '擷取地圖名' },
+  { action: 'sizeUp', label: '放大' },
+  { action: 'sizeDown', label: '縮小' },
+  { action: 'opacityUp', label: '提高不透明度' },
+  { action: 'opacityDown', label: '降低不透明度' }
+] as const;
+const KEY_LABELS: Record<string, string> = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space' };
+const keyLabel = (name: string) => KEY_LABELS[name] || name;
+
+function openSettings() { showSettings.value = true; }
+function closeSettings() {
+  if (rebindingAction.value) window.api.cancelRebind(); // 有未完成的綁定就取消
+  rebindingAction.value = null;
+  showSettings.value = false;
+}
+function rebind(action: string) {
+  rebindingAction.value = action;
+  window.api.startRebind(action as KeyAction);
+}
+// 主程序綁定完成會回推新的 keys → 結束「等待按鍵」狀態
+watch(keys, () => { rebindingAction.value = null; }, { deep: true });
 
 // 除錯模式：開啟前先跳自訂同意彈窗（說明會存什麼、存多久、怎麼清除）
 const showDebugConsent = ref(false);
@@ -72,6 +98,12 @@ function openLogs() { window.api.openLogs(); }
       <span v-if="isDev" class="tb-ver dev-tag">Develop</span>
       <span v-else-if="version" class="tb-ver">v{{ version }}</span>
       <div class="tb-controls">
+        <button class="tb-btn" @click="openSettings" aria-label="設定">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 13a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
+          </svg>
+        </button>
         <button class="tb-btn" @click="minimize" aria-label="最小化">
           <svg viewBox="0 0 24 24"><path d="M5 12h14" /></svg>
         </button>
@@ -182,6 +214,28 @@ function openLogs() { window.api.openLogs(); }
         <div class="modal-actions">
           <button class="m-btn" @click="cancelDebug">取消</button>
           <button class="m-btn primary" @click="confirmDebug">開啟</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 熱鍵設定彈窗 -->
+    <div v-if="showSettings" class="modal-mask" @click.self="closeSettings">
+      <div class="modal">
+        <div class="modal-title">熱鍵設定</div>
+        <div class="keybinds">
+          <div v-for="b in keyActions" :key="b.action" class="kb-row">
+            <span class="kb-label">{{ b.label }}</span>
+            <button
+              class="kb-key"
+              :class="{ listening: rebindingAction === b.action }"
+              @click="rebind(b.action)">
+              {{ rebindingAction === b.action ? '按下新的鍵…' : keyLabel(keys[b.action]) }}
+            </button>
+          </div>
+        </div>
+        <p class="kb-hint">點按鍵後按下想要的鍵即可重新綁定，Esc 取消。</p>
+        <div class="modal-actions">
+          <button class="m-btn primary" @click="closeSettings">完成</button>
         </div>
       </div>
     </div>
@@ -548,4 +602,25 @@ body {
 .m-btn:hover { background: rgba(255, 255, 255, 0.1); }
 .m-btn.primary { background: #46d6a0; border-color: #46d6a0; color: #0d2a1f; font-weight: 700; }
 .m-btn.primary:hover { background: #54e2ad; }
+
+/* ===== 熱鍵設定 ===== */
+.keybinds { display: flex; flex-direction: column; gap: 8px; }
+.kb-row { display: flex; align-items: center; justify-content: space-between; }
+.kb-label { font-size: 12px; color: #b6b7c2; }
+.kb-key {
+  min-width: 78px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.kb-key:hover { background: rgba(255, 255, 255, 0.12); }
+.kb-key.listening { border-color: #46d6a0; color: #46d6a0; background: rgba(70, 214, 160, 0.08); }
+.kb-hint { font-size: 10.5px; color: #6c6d78; margin: 10px 0 0; text-align: center; line-height: 1.5; }
 </style>

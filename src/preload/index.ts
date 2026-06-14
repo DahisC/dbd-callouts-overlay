@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('api', {
   setClickThrough: (v) => ipcRenderer.send('set-click-through', v),
   setHideUnfocused: (v) => ipcRenderer.send('set-hide-unfocused', v),
   setDebug: (v) => ipcRenderer.send('set-debug', v),
+  startRebind: (action) => ipcRenderer.send('start-rebind', action),
+  cancelRebind: () => ipcRenderer.send('cancel-rebind'),
   minimizeControl: () => ipcRenderer.send('control-minimize'),
   quit: () => ipcRenderer.send('quit-app'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
