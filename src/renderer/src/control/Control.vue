@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useSettings } from '../composables/useSettings';
-import { useMaps } from '../composables/useMaps';
 import { useUpdater } from '../composables/useUpdater';
 import { useGameStatus } from '../composables/useGameStatus';
 import { useAutoFit } from '../composables/useAutoFit';
@@ -10,7 +9,7 @@ const isDev = import.meta.env.DEV;  // 開發模式（打包後為 false)
 
 // 外觀 / 行為設定（啟用、透明度、大小、滑鼠穿透、只在遊戲時顯示）
 const {
-  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug, keys,
+  enabled, opacity, scale, clickThrough, hideWhenUnfocused, debug, keys,
   opacityFill, scaleFill,
   onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
 } = useSettings();
@@ -56,8 +55,6 @@ function cancelDebug() {
   debug.value = false; // 還原開關
 }
 
-// 地圖清單與目前選取（下拉與 imagePath 連動）
-const { currentMapName } = useMaps(imagePath);
 
 // 自動更新（狀態 / 按鈕文字 / 點擊）
 const { update, isDownloaded, updBtnText, updBtnBusy, onUpdateClick } = useUpdater();
@@ -138,7 +135,7 @@ function openLogs() { window.api.openLogs(); }
       </div>
       <div class="dz-title">{{ status.title }}</div>
       <div class="dz-hint">
-        <template v-if="status.key === 'ok'">進入遊戲後按 <kbd class="kc">Tab</kbd> 開啟計分板，再按 <kbd class="kc">{{ keyLabel(keys.capture) }}</kbd> 擷取地圖名<br>目前地圖：{{ currentMapName }}</template>
+        <template v-if="status.key === 'ok'">在遊戲中按 <kbd class="kc">Tab</kbd> 保持計分板開啟，並按 <kbd class="kc">{{ keyLabel(keys.capture) }}</kbd> 就會自動載入地圖<br>辨識偶爾可能有誤，若地圖不對再按一次即可重試</template>
         <template v-else>{{ status.hint }}</template>
       </div>
     </section>
