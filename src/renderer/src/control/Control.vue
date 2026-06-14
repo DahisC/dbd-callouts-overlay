@@ -68,10 +68,10 @@ function openLogs() { window.api.openLogs(); }
 
     <div class="app">
     <!-- 啟用 -->
-    <label class="toggle">
+    <div class="toggle">
       <span>啟用</span>
-      <input type="checkbox" v-model="enabled" @change="onEnabled" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="enabled" @change="onEnabled" /><i></i></label>
+    </div>
 
     <!-- 虛線區塊:遊戲狀態提示 -->
     <section class="dashed" :class="status.key">
@@ -95,16 +95,16 @@ function openLogs() { window.api.openLogs(); }
 
     <template v-if="enabled">
     <!-- 滑鼠穿透 -->
-    <label class="toggle">
+    <div class="toggle">
       <span>滑鼠穿透</span>
-      <input type="checkbox" v-model="clickThrough" @change="onClickThrough" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="clickThrough" @change="onClickThrough" /><i></i></label>
+    </div>
 
     <!-- 不在前景時隱藏地圖 -->
-    <label class="toggle">
+    <div class="toggle">
       <span>只在遊戲時顯示地圖</span>
-      <input type="checkbox" v-model="hideWhenUnfocused" @change="onHideUnfocused" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="hideWhenUnfocused" @change="onHideUnfocused" /><i></i></label>
+    </div>
 
     <!-- 大小 -->
     <section class="field">
@@ -138,10 +138,10 @@ function openLogs() { window.api.openLogs(); }
 
     <!-- 除錯模式:保留檔案日誌與每次截圖,關閉時清空。
          「開啟資料夾」連結同一行,且不需開啟 toggle 即可點 -->
-    <label class="toggle dim">
+    <div class="toggle dim">
       <span>除錯模式 <a href="#" class="link" @click.prevent="openLogs">開啟資料夾</a></span>
-      <input type="checkbox" v-model="debug" @change="onDebug" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="debug" @change="onDebug" /><i></i></label>
+    </div>
 
     <!-- 作者(左)與地圖 callout 來源(右),版本號移到標題列 -->
     <footer class="credit">
@@ -368,8 +368,9 @@ body {
   font-size: 12.5px;        /* 與 .cap 一致 */
   color: var(--muted);
   letter-spacing: 0.5px;
-  cursor: pointer;
 }
+/* 只有開關本體可點切換(整條不再觸發)*/
+.toggle .sw { display: inline-flex; align-items: center; cursor: pointer; }
 .toggle input { display: none; }
 .toggle i {
   width: 38px; height: 20px;

@@ -46,8 +46,8 @@ test('控制台標題列正確渲染', async () => {
 
 test('切「啟用」toggle 會寫進 settings.json', async () => {
   const control = await windowByName('control');
-  // 預設 enabled=true;點一下關掉
-  await control.locator('label.toggle', { hasText: '啟用' }).first().click();
+  // 預設 enabled=true;點開關本體關掉(整條不再可點)
+  await control.locator('.toggle', { hasText: '啟用' }).locator('.sw').click();
 
   const settingsPath = join(userDataDir, 'settings.json');
   await expect
