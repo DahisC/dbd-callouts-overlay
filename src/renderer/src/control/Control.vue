@@ -50,7 +50,7 @@ onMounted(async () => { version.value = await window.api.getVersion(); });
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
   if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  return { key: 'ok', title: '已就緒', hint: `按 Tab 開啟計分板以自動偵測地圖\n目前地圖：${currentMapName.value}` };
+  return { key: 'ok', title: '已就緒', hint: `進入遊戲後按下 Tab 開啟計分板，直到地圖載入\n目前地圖：${currentMapName.value}` };
 });
 
 // 視窗控制
