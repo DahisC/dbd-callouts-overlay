@@ -70,12 +70,9 @@ test('開啟 Debug 後才會寫入檔案日誌', async () => {
   const hasLog = () => existsSync(logsDir) && readdirSync(logsDir).some((f) => /^\d{4}-\d{2}-\d{2}\.log$/.test(f));
   expect(hasLog()).toBe(false); // 預設關閉 → 還沒有 log
 
-  // 開啟除錯會跳原生說明對話框,Playwright 點不到 → 先 stub 成自動同意
-  await app.evaluate(({ dialog }) => {
-    dialog.showMessageBox = (async () => ({ response: 0 })) as typeof dialog.showMessageBox;
-  });
   const control = await windowByName('control');
-  await control.locator('.toggle.dim i').first().click(); // 點除錯開關本體(避開同行的連結)
+  await control.locator('.toggle.dim i').first().click();   // 點除錯開關 → 跳自訂同意彈窗
+  await control.locator('.modal .m-btn.primary').click();   // 在彈窗按「開啟」
 
   await expect
     .poll(hasLog, { message: '開啟除錯後 logs/ 應出現 YYYY-MM-DD.log', timeout: 8_000 })

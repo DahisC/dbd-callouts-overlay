@@ -32,7 +32,6 @@ export function useSettings() {
   const onScale = () => window.api.setScale(Number(scale.value));
   const onClickThrough = () => window.api.setClickThrough(clickThrough.value);
   const onHideUnfocused = () => window.api.setHideUnfocused(hideWhenUnfocused.value);
-  const onDebug = () => window.api.setDebug(debug.value);
 
   // 拉桿填色比例(0.1~1 映射到 0~100%)
   const opacityFill = computed(() => `${((opacity.value - 0.1) / 0.9) * 100}%`);
@@ -41,6 +40,6 @@ export function useSettings() {
   return {
     enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug,
     opacityFill, scaleFill,
-    onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused, onDebug
+    onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
   };
 }
