@@ -76,7 +76,7 @@ onMounted(async () => { version.value = await window.api.getVersion(); });
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
   if (!running.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  return { key: 'ok', title: '已偵測到遊戲', hint: `進入遊戲後按 Tab 開啟計分板，再按 F 擷取地圖名\n目前地圖：${currentMapName.value}` };
+  return { key: 'ok', title: '已偵測到遊戲' }; // hint 由模板渲染(含鍵帽,擷取鍵依設定)
 });
 
 // 視窗控制
@@ -137,7 +137,10 @@ function openLogs() { window.api.openLogs(); }
         <span v-else class="dot"></span>
       </div>
       <div class="dz-title">{{ status.title }}</div>
-      <div class="dz-hint">{{ status.hint }}</div>
+      <div class="dz-hint">
+        <template v-if="status.key === 'ok'">進入遊戲後按 <kbd class="kc">Tab</kbd> 開啟計分板，再按 <kbd class="kc">{{ keyLabel(keys.capture) }}</kbd> 擷取地圖名<br>目前地圖：{{ currentMapName }}</template>
+        <template v-else>{{ status.hint }}</template>
+      </div>
     </section>
 
     <template v-if="enabled">
@@ -392,6 +395,26 @@ body {
   white-space: pre-line;
   line-height: 1.65;
   min-height: 3.3em;   /* 預留兩行高度，讓三種狀態版面一致 */
+}
+/* 提示文字內的鍵帽（Tab／擷取鍵），沿用拉桿鍵帽的視覺 */
+.dz-hint .kc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 17px;
+  padding: 0 5px;
+  margin: 0 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  color: #c2c3cd;
+  font-family: var(--ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
 }
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(var(--c), 0.55); }
