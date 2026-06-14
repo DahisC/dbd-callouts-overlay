@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('api', {
   onGameState: (cb) => ipcRenderer.on('game-state', (_e, st) => cb(st)),
   resizeControl: (height) => ipcRenderer.send('resize-control', height),
 
+  // --- toast 用 ---
+  onToast: (cb) => ipcRenderer.on('toast', (_e, t) => cb(t)),
+
   // --- overlay 用 ---
   onSetImage: (cb) => ipcRenderer.on('set-image', (_e, path) => cb(path)),
   onShowHud: (cb) => ipcRenderer.on('show-hud', (_e, text) => cb(text)),

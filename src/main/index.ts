@@ -97,6 +97,7 @@ const KEY_NAMES = Object.fromEntries(
 let settings = { ...DEFAULT_SETTINGS };
 let overlayWin = null;
 let controlWin = null;
+let toastWin = null;   // 擷取回饋小視窗(螢幕左上)
 let imgNatural = { w: 0, h: 0 }; // 目前圖片的原始像素尺寸
 
 function loadSettings() {
@@ -284,6 +285,52 @@ function createControlWindow() {
   });
 
   controlWin.on('closed', () => { controlWin = null; });
+}
+
+// 擷取回饋小視窗:無邊框、透明、置頂、滑鼠穿透,釘在主螢幕左上角
+function createToastWindow() {
+  toastWin = new BrowserWindow({
+    width: 300,
+    height: 48,
+    show: false,
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    focusable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    webPreferences: {
+      preload: join(__dirname, '../preload/index.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  });
+  toastWin.setAlwaysOnTop(true, 'screen-saver');
+  toastWin.setIgnoreMouseEvents(true); // 完全穿透,不擋遊戲操作
+  hardenWindow(toastWin);
+  loadPage(toastWin, 'toast');
+  toastWin.on('closed', () => { toastWin = null; });
+}
+
+// 顯示擷取回饋:capturing 不自動關(等結果取代),結果顯示約 2 秒後關
+let toastHideTimer = null;
+function showToast(payload) {
+  if (!toastWin || toastWin.isDestroyed()) return;
+  const wa = screen.getPrimaryDisplay().workArea; // 釘在主螢幕工作區左上
+  const b = toastWin.getBounds();
+  toastWin.setBounds({ x: wa.x + 16, y: wa.y + 16, width: b.width, height: b.height });
+  toastWin.showInactive();
+  toastWin.setAlwaysOnTop(true, 'screen-saver');
+  toastWin.webContents.send('toast', payload);
+  if (toastHideTimer) clearTimeout(toastHideTimer);
+  if (payload.state !== 'capturing') {
+    toastHideTimer = setTimeout(() => {
+      if (toastWin && !toastWin.isDestroyed()) toastWin.hide();
+    }, 2000);
+  }
 }
 
 // 自訂標題列:最小化
@@ -528,11 +575,13 @@ async function onCaptureKey() {
   capturing = true;
   try {
     captureCount++;
+    const keyName = settings.keys.capture; // log 用實際綁定的鍵名,而非寫死
     if (settings.onlyWhenDbdFocused && !isDbdForeground()) {
-      console.log(`[key] F #${captureCount} skipped: DBD not in foreground`);
+      console.log(`[key] ${keyName} #${captureCount} skipped: DBD not in foreground`);
       return;
     }
-    console.log(`[key] F detected (#${captureCount}), capturing in ${CAPTURE_DELAY}ms`);
+    console.log(`[key] ${keyName} detected (#${captureCount}), capturing in ${CAPTURE_DELAY}ms`);
+    showToast({ state: 'capturing', text: '擷取中…' });
     await delay(CAPTURE_DELAY);
     const regionPng = await captureNameRegion();
     const { text, image } = await recognizeMapName(regionPng);
@@ -550,9 +599,13 @@ async function onCaptureKey() {
       saveSettings();
       pushImage();        // overlay 自動切換
       notifyControl();    // 控制台下拉同步
+      showToast({ state: 'switched', text: best.map.name });
+    } else {
+      showToast({ state: 'skipped', text: '未偵測到地圖' });
     }
   } catch (e) {
     console.error('[ocr] recognition failed:', e);
+    showToast({ state: 'skipped', text: '辨識失敗' });
   } finally {
     capturing = false;
   }
@@ -664,6 +717,7 @@ app.whenReady().then(() => {
   startForegroundMonitor();
   createOverlayWindow();
   createControlWindow();
+  createToastWindow();
   setupAutoUpdater();
 
   app.on('activate', () => {
