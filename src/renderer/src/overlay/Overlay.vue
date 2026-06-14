@@ -17,6 +17,10 @@ const { hud, hudShow } = useHud();
 
 // 自訂拖曳(回傳的 onMouseDown 綁在容器上)
 const { onMouseDown } = useOverlayDrag();
+
+// 擷取讀取效果:主程序通知擷取中 → 地圖變暗 + 轉圈圈
+const capturing = ref(false);
+window.api.onCaptureStatus((on) => { capturing.value = on; });
 </script>
 
 <template>
@@ -24,6 +28,8 @@ const { onMouseDown } = useOverlayDrag();
     <img v-if="src" :src="src" @load="onImgLoad" draggable="false" />
     <div v-else class="hint">地圖未載入</div>
     <div class="hud" :class="{ show: hudShow }">{{ hud }}</div>
+    <!-- 擷取中:遮罩 + 轉圈圈 -->
+    <div v-if="capturing" class="cap-mask"><div class="spinner"></div></div>
   </div>
 </template>
 
@@ -90,5 +96,27 @@ img {
   background: rgba(0, 0, 0, 0.45);
   border: 1px dashed rgba(255, 255, 255, 0.5);
   box-sizing: border-box;
+}
+
+/* 擷取讀取效果:遮罩 + 轉圈圈 */
+.cap-mask {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+.spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

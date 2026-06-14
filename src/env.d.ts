@@ -61,7 +61,7 @@ interface Api {
   onSettings(cb: (s: Settings) => void): void;
   onGameState(cb: (st: GameState) => void): void;
   resizeControl(height: number): void;
-  onToast(cb: (t: { state: string; text: string }) => void): void;
+  onCaptureStatus(cb: (on: boolean) => void): void;
   // overlay
   onSetImage(cb: (dataUrl: string) => void): void;
   onShowHud(cb: (text: string) => void): void;

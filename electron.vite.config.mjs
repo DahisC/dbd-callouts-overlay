@@ -20,11 +20,10 @@ export default defineConfig({
     root: 'src/renderer',
     build: {
       rollupOptions: {
-        // 各畫面各自一個 HTML 進入點
+        // 兩個畫面各自一個 HTML 進入點
         input: {
           overlay: resolve(__dirname, 'src/renderer/overlay.html'),
-          control: resolve(__dirname, 'src/renderer/control.html'),
-          toast: resolve(__dirname, 'src/renderer/toast.html')
+          control: resolve(__dirname, 'src/renderer/control.html')
         }
       }
     },
