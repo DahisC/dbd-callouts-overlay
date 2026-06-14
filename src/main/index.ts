@@ -460,8 +460,8 @@ function startForegroundMonitor() {
       let changed = false;
       if (focused !== dbdFocused) {
         dbdFocused = focused;
-        // 焦點變化是隱藏/顯示功能的關鍵事件,記錄目前前景程序名以便 debug
-        console.log(`[fg] focus changed: DBD=${focused} (foreground: ${fgProcName || 'unknown'})`);
+        // 焦點變化是隱藏/顯示功能的關鍵事件
+        console.log(`[fg] focus changed: DBD=${focused}`);
         applyOverlayVisibility(); // 焦點一變就即時顯示/隱藏(約 0.6s 內)
         changed = true;
       }
