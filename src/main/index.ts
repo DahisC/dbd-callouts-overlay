@@ -74,10 +74,25 @@ const DEFAULT_SETTINGS = {
   x: 0,               // overlay 左上角位置
   y: 0,
   clickThrough: false,   // 滑鼠是否穿透 overlay
-  onlyWhenDbdFocused: true, // Tab 偵測只在 DBD 為最前景視窗時才觸發
+  onlyWhenDbdFocused: true, // F 偵測只在 DBD 為最前景視窗時才觸發
   hideWhenUnfocused: true, // DBD 不在最前景時自動隱藏地圖
-  debug: false             // debug 模式:保留檔案日誌與每次截圖
+  debug: false,            // debug 模式:保留檔案日誌與每次截圖
+  // 可自訂熱鍵(值為 uiohook 的按鍵名稱)
+  keys: {
+    capture: 'F',            // 擷取地圖名
+    sizeUp: 'ArrowUp',       // 放大
+    sizeDown: 'ArrowDown',   // 縮小
+    opacityUp: 'ArrowRight', // 提高不透明度
+    opacityDown: 'ArrowLeft' // 降低不透明度
+  }
 };
+
+// 可重新綁定的動作清單
+const KEY_ACTIONS = ['capture', 'sizeUp', 'sizeDown', 'opacityUp', 'opacityDown'];
+// uiohook 按鍵碼 → 名稱(供重新綁定時把按到的鍵存成名稱)
+const KEY_NAMES = Object.fromEntries(
+  Object.entries(UiohookKey).map(([name, code]) => [code, name])
+);
 
 let settings = { ...DEFAULT_SETTINGS };
 let overlayWin = null;
@@ -90,6 +105,8 @@ function loadSettings() {
   } catch {
     settings = { ...DEFAULT_SETTINGS };
   }
+  // keys 是巢狀物件,補上舊設定缺少的動作(淺層 merge 不會自動補)
+  settings.keys = { ...DEFAULT_SETTINGS.keys, ...(settings.keys || {}) };
 }
 
 function saveSettings() {
@@ -100,7 +117,7 @@ function saveSettings() {
   }
 }
 
-// 地圖清單快取:避免每次按 Tab 都同步重掃磁碟。
+// 地圖清單快取:避免每次按 F 都同步重掃磁碟。
 // 使用者開控制台時(list-maps)才強制重掃,以撿到新放入的地圖。
 let mapsCache: MapItem[] | null = null;
 function getMaps(forceRefresh = false) {
@@ -244,7 +261,7 @@ ipcMain.on('drag-end', () => {
 
 function createControlWindow() {
   controlWin = new BrowserWindow({
-    width: 360,
+    width: 410,
     height: 200,
     useContentSize: true,   // 寬高指的是內容區,方便依內容貼合
     title: 'DBD Callouts Overlay',
@@ -267,6 +284,13 @@ function createControlWindow() {
   });
 
   controlWin.on('closed', () => { controlWin = null; });
+}
+
+// 擷取回饋:通知 overlay。'capturing' 顯示遮罩+轉圈圈;'success'/'fail' 閃綠/紅邊框
+function showCaptureStatus(state) {
+  if (overlayWin && !overlayWin.isDestroyed()) {
+    overlayWin.webContents.send('capture-status', state);
+  }
 }
 
 // 自訂標題列:最小化
@@ -310,6 +334,7 @@ ipcMain.on('set-hide-unfocused', (_e, v) => {
 });
 
 ipcMain.on('set-debug', (_e, v) => {
+  // 開啟前的同意說明改由控制台的自訂彈窗處理;這裡只負責套用
   settings.debug = !!v;
   applyDebug(settings.debug); // 開→啟用日誌/截圖;關→停寫並清空 logs/screenshots
   saveSettings();
@@ -380,11 +405,11 @@ ipcMain.on('select-map', (_e, path) => {
 
 // ---- App 生命週期 ----
 
-// ===== 用 uiohook 監聽 Tab(只聽不攔,遊戲照樣收到 Tab) =====
-const CAPTURE_DELAY = 350;  // 按 Tab 後等記分板動畫跑完再截
+// ===== 用 uiohook 監聽 F 鍵(只聽不攔,遊戲照樣收到 F) =====
+const CAPTURE_DELAY = 350;  // 按 F 後等記分板動畫跑完再截
 let capturing = false;
-let tabCount = 0;
-let tabHeld = false;   // Tab 是否正被按住(用來忽略自動重複)
+let captureCount = 0;
+let keyHeld = false;   // 觸發鍵(F)是否正被按住(用來忽略自動重複)
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -453,9 +478,10 @@ function sendGameState() {
   }
 }
 
-// 地圖名稱所在區域:畫面切成左中右各 1/3、上下各 1/2,取「中下」那一塊
-// (中間欄、下半部)。依此比例換算成實際像素矩形。之後再依截圖往內收。
-const NAME_REGION = { x: 1 / 3, y: 1 / 2, w: 1 / 3, h: 1 / 2 };
+// 地圖名稱所在區域:水平取中間 1/3(長名字也要容納,左右不再縮);
+// 垂直取螢幕底部 20%(y 0.80~1.0)——名字隨遊戲 UI 縮放落在 ~0.87~0.94,
+// 這樣兩種極端 UI 都在框內,又排除上方記分板(perk 圖示等)的雜訊。
+const NAME_REGION = { x: 1 / 3, y: 0.8, w: 1 / 3, h: 0.2 };
 
 // 用 GDI(.NET CopyFromScreen)只截「地圖名矩形」,而非整張畫面。
 // 讀回的像素極少 → 避免整張畫面從 GPU 讀回造成的卡頓。回傳該矩形的 PNG buffer。
@@ -487,56 +513,59 @@ $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
       { windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
       (err, stdout) => {
         if (err) return reject(err);
-        const buf = Buffer.from(String(stdout).trim(), 'base64');
         console.log(`[capture] region ${w}x${h} @(${x},${y})`);
-        // debug 模式:把這次截到的矩形存檔,方便檢查 / 校正 NAME_REGION
-        if (settings.debug) {
-          try {
-            const n = new Date();
-            const stamp = `${today}_${_pad(n.getHours())}-${_pad(n.getMinutes())}-${_pad(n.getSeconds())}-${n.getMilliseconds()}`;
-            writeFileSync(join(screenshotsDir(), `${stamp}.png`), buf);
-          } catch { /* ignore */ }
-        }
-        resolve(buf);
+        resolve(Buffer.from(String(stdout).trim(), 'base64'));
       }
     );
   });
 }
 
-async function onTabPressed() {
+// debug 模式:把「OCR 實際處理後的圖」存進 screenshots(所見即 OCR 所見;灰階高對比也較小)
+function saveDebugShot(png: Buffer) {
+  try {
+    const n = new Date();
+    const stamp = `${today}_${_pad(n.getHours())}-${_pad(n.getMinutes())}-${_pad(n.getSeconds())}-${n.getMilliseconds()}`;
+    writeFileSync(join(screenshotsDir(), `${stamp}.png`), png);
+  } catch { /* ignore */ }
+}
+
+async function onCaptureKey() {
   if (capturing) return;       // 防止連按/長按重複觸發
   if (!settings.enabled) return; // 停用時不偵測 / 不切換
   capturing = true;
   try {
-    tabCount++;
+    captureCount++;
+    const keyName = settings.keys.capture; // log 用實際綁定的鍵名,而非寫死
     if (settings.onlyWhenDbdFocused && !isDbdForeground()) {
-      console.log(`[tab] #${tabCount} skipped: DBD not in foreground`);
+      console.log(`[key] ${keyName} #${captureCount} skipped: DBD not in foreground`);
       return;
     }
-    console.log(`[tab] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms`);
+    console.log(`[key] ${keyName} detected (#${captureCount}), capturing in ${CAPTURE_DELAY}ms`);
+    showCaptureStatus('capturing'); // 地圖變暗 + 轉圈圈
     await delay(CAPTURE_DELAY);
     const regionPng = await captureNameRegion();
-    const text = await recognizeMapName(regionPng);
+    const { text, image } = await recognizeMapName(regionPng);
+    if (settings.debug) saveDebugShot(image); // 存 OCR 實際看到的那張
     const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 
-    const matchInfo = best ? `${best.map.group}/${best.map.name} (${best.score.toFixed(2)})` : 'no match';
-    if (switched) {
-      // 有切換才印完整辨識文字(這時才需要看原文)
-      console.log(`[ocr] "${text.replace(/\s+/g, ' ').trim()}" -> ${matchInfo} [switched]`);
-    } else {
-      // 沒切換通常是雜訊辨識,不印整串雜訊,只留比對結果與分數,保持 log 乾淨
-      console.log(`[ocr] ${matchInfo} [skipped]`);
-    }
+    // 統一格式:截圖辨識到的文字 / 判斷相符的地圖名 [分數] [switched|skipped]
+    const recognized = text.replace(/\s+/g, ' ').trim() || '(空)';
+    const mapName = best ? best.map.name : '(無)';
+    console.log(`[ocr] ${recognized}/${mapName} [${(best ? best.score : 0).toFixed(2)}] [${switched ? 'switched' : 'skipped'}]`);
 
     if (switched) {
       settings.imagePath = best.map.path;
       saveSettings();
       pushImage();        // overlay 自動切換
       notifyControl();    // 控制台下拉同步
+      showCaptureStatus('success'); // 收起遮罩、閃綠邊框
+    } else {
+      showCaptureStatus('fail');     // 收起遮罩、閃紅邊框
     }
   } catch (e) {
     console.error('[ocr] recognition failed:', e);
+    showCaptureStatus('fail');
   } finally {
     capturing = false;
   }
@@ -578,34 +607,56 @@ function adjustOpacity(delta) {
   scheduleSave();
 }
 
-async function onArrowKey(keycode) {
+// 大小 / 透明度微調鍵(讀自訂設定)
+async function onAdjustKey(keycode) {
+  const k = settings.keys;
   let action = null;
-  if (keycode === UiohookKey.ArrowUp) action = () => adjustScale(+STEP_SCALE);
-  else if (keycode === UiohookKey.ArrowDown) action = () => adjustScale(-STEP_SCALE);
-  else if (keycode === UiohookKey.ArrowRight) action = () => adjustOpacity(+STEP_OPACITY);
-  else if (keycode === UiohookKey.ArrowLeft) action = () => adjustOpacity(-STEP_OPACITY);
+  if (keycode === UiohookKey[k.sizeUp]) action = () => adjustScale(+STEP_SCALE);
+  else if (keycode === UiohookKey[k.sizeDown]) action = () => adjustScale(-STEP_SCALE);
+  else if (keycode === UiohookKey[k.opacityUp]) action = () => adjustOpacity(+STEP_OPACITY);
+  else if (keycode === UiohookKey[k.opacityDown]) action = () => adjustOpacity(-STEP_OPACITY);
   if (!action) return;
-  // 跟 Tab 一樣:只在 DBD 為前景時生效(桌面操作不受干擾)
+  // 跟截圖鍵一樣:只在 DBD 為前景時生效(桌面操作不受干擾)
   if (settings.onlyWhenDbdFocused && !isDbdForeground()) return;
   action();
 }
 
+// 重新綁定:有值時,下一個按鍵就設為該動作的新熱鍵(Esc 取消)
+let rebindAction: string | null = null;
+ipcMain.on('start-rebind', (_e, action) => {
+  if (KEY_ACTIONS.includes(action)) rebindAction = action;
+});
+ipcMain.on('cancel-rebind', () => {
+  rebindAction = null;
+  notifyControl();
+});
+
 function startKeyHook() {
   uIOhook.on('keydown', (e) => {
-    if (e.keycode === UiohookKey.Tab) {
-      if (tabHeld) return;   // 按住期間的重複 keydown,略過
-      tabHeld = true;
-      onTabPressed();
+    // 重新綁定模式:攔下這個按鍵當作新熱鍵,不觸發原動作
+    if (rebindAction) {
+      if (e.keycode !== UiohookKey.Escape) {
+        const name = KEY_NAMES[e.keycode];
+        if (name) { settings.keys[rebindAction] = name; saveSettings(); }
+      }
+      rebindAction = null;
+      notifyControl(); // 把更新後的 keys 推回控制台
       return;
     }
-    onArrowKey(e.keycode);   // 方向鍵微調(按住會持續調整)
+    if (e.keycode === UiohookKey[settings.keys.capture]) {
+      if (keyHeld) return;   // 按住期間的重複 keydown,略過
+      keyHeld = true;
+      onCaptureKey();
+      return;
+    }
+    onAdjustKey(e.keycode);   // 大小 / 透明度微調(按住會持續調整)
   });
   uIOhook.on('keyup', (e) => {
-    if (e.keycode === UiohookKey.Tab) tabHeld = false;
+    if (e.keycode === UiohookKey[settings.keys.capture]) keyHeld = false;
   });
   try {
     uIOhook.start();
-    console.log('[hook] uiohook started, listening for Tab (non-blocking)');
+    console.log('[hook] uiohook started (non-blocking)');
   } catch (err) {
     console.error('[hook] uiohook failed to start:', err);
   }

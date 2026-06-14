@@ -46,8 +46,8 @@ test('控制台標題列正確渲染', async () => {
 
 test('切「啟用」toggle 會寫進 settings.json', async () => {
   const control = await windowByName('control');
-  // 預設 enabled=true;點一下關掉
-  await control.locator('label.toggle', { hasText: '啟用' }).first().click();
+  // 預設 enabled=true;點開關本體關掉(整條不再可點)
+  await control.locator('.toggle', { hasText: '啟用' }).locator('.sw').click();
 
   const settingsPath = join(userDataDir, 'settings.json');
   await expect
@@ -71,9 +71,21 @@ test('開啟 Debug 後才會寫入檔案日誌', async () => {
   expect(hasLog()).toBe(false); // 預設關閉 → 還沒有 log
 
   const control = await windowByName('control');
-  await control.locator('.toggle.dim i').first().click(); // 點除錯開關本體(避開同行的連結)
+  await control.locator('.toggle.dim i').first().click();   // 點除錯開關 → 跳自訂同意彈窗
+  await control.locator('.modal .m-btn.primary').click();   // 在彈窗按「開啟」
 
   await expect
     .poll(hasLog, { message: '開啟除錯後 logs/ 應出現 YYYY-MM-DD.log', timeout: 8_000 })
     .toBe(true);
+});
+
+test('點齒輪開啟熱鍵設定，顯示 5 個可綁定熱鍵', async () => {
+  const control = await windowByName('control');
+  await control.locator('.tb-btn[aria-label="設定"]').click();
+  await expect(control.locator('.modal-title', { hasText: '熱鍵設定' })).toBeVisible();
+  await expect(control.locator('.kb-row')).toHaveCount(5);
+  // 預設擷取鍵顯示 F
+  await expect(
+    control.locator('.kb-row', { hasText: '擷取地圖名' }).locator('.kb-key')
+  ).toHaveText('F');
 });

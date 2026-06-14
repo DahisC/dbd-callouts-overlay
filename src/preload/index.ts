@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('api', {
   setClickThrough: (v) => ipcRenderer.send('set-click-through', v),
   setHideUnfocused: (v) => ipcRenderer.send('set-hide-unfocused', v),
   setDebug: (v) => ipcRenderer.send('set-debug', v),
+  startRebind: (action) => ipcRenderer.send('start-rebind', action),
+  cancelRebind: () => ipcRenderer.send('cancel-rebind'),
   minimizeControl: () => ipcRenderer.send('control-minimize'),
   quit: () => ipcRenderer.send('quit-app'),
   openExternal: (url) => ipcRenderer.send('open-external', url),
@@ -26,6 +28,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // --- overlay 用 ---
   onSetImage: (cb) => ipcRenderer.on('set-image', (_e, path) => cb(path)),
+  onCaptureStatus: (cb) => ipcRenderer.on('capture-status', (_e, state) => cb(state)),
   onShowHud: (cb) => ipcRenderer.on('show-hud', (_e, text) => cb(text)),
   reportImageSize: (size) => ipcRenderer.send('image-natural-size', size),
   dragStart: () => ipcRenderer.send('drag-start'),

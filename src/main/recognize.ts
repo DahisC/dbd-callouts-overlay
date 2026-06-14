@@ -23,14 +23,32 @@ export async function terminateWorker() {
   }
 }
 
-// 對「已裁切好的地圖名區域 PNG」做 OCR(放大 2 倍有助小字辨識),回傳辨識文字
-export async function recognizeMapName(regionPng: Buffer): Promise<string> {
+// 純灰階(不做對比拉伸):拉伸會把背景霧的漸層放大成雜訊,反而讓辨識更差。
+// 灰階讓存檔較小,也等同 tesseract 內部會做的轉換,實際分離交給它的二值化。
+function toGrayscale(img: Electron.NativeImage): Electron.NativeImage {
+  const { width, height } = img.getSize();
+  if (!width || !height) return img;
+  const bmp = img.toBitmap(); // BGRA
+  const out = Buffer.allocUnsafe(bmp.length);
+  for (let i = 0; i < bmp.length; i += 4) {
+    const y = (bmp[i + 2] * 0.299 + bmp[i + 1] * 0.587 + bmp[i] * 0.114) | 0;
+    out[i] = out[i + 1] = out[i + 2] = y;
+    out[i + 3] = 255;
+  }
+  return nativeImage.createFromBitmap(out, { width, height });
+}
+
+// 對「已裁切好的地圖名區域 PNG」做 OCR:灰階 → 放大 2 倍 → 辨識。
+// 回傳辨識文字,以及灰階後的 PNG(供 debug 存檔:即 OCR 所見的內容,且檔案較小)。
+export async function recognizeMapName(regionPng: Buffer): Promise<{ text: string; image: Buffer }> {
   let img = nativeImage.createFromBuffer(regionPng);
+  img = toGrayscale(img);
+  const image = img.toPNG();
   const { width } = img.getSize();
   if (width > 0) img = img.resize({ width: width * 2 });
   const worker = await getWorker();
   const { data } = await worker.recognize(img.toPNG());
-  return data.text || '';
+  return { text: data.text || '', image };
 }
 
 // 比對邏輯已移到 ./match(純函式,便於測試);此處 re-export 維持既有 import 路徑

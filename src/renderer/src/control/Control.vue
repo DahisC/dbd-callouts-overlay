@@ -1,24 +1,65 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, watch } from 'vue';
 import { useSettings } from '../composables/useSettings';
 import { useMaps } from '../composables/useMaps';
 import { useUpdater } from '../composables/useUpdater';
 import { useGameStatus } from '../composables/useGameStatus';
 import { useAutoFit } from '../composables/useAutoFit';
 
-const isDev = import.meta.env.DEV;  // 開發模式(打包後為 false)
+const isDev = import.meta.env.DEV;  // 開發模式（打包後為 false)
 
-// 外觀 / 行為設定(啟用、透明度、大小、滑鼠穿透、只在遊戲時顯示)
+// 外觀 / 行為設定（啟用、透明度、大小、滑鼠穿透、只在遊戲時顯示）
 const {
-  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug,
+  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug, keys,
   opacityFill, scaleFill,
-  onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused, onDebug
+  onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
 } = useSettings();
 
-// 地圖清單與目前選取(下拉與 imagePath 連動)
+// ===== 熱鍵設定 =====
+const showSettings = ref(false);
+const rebindingAction = ref<string | null>(null); // 正在等待按鍵的動作
+const keyActions = [
+  { action: 'capture', label: '擷取地圖名' },
+  { action: 'sizeUp', label: '放大' },
+  { action: 'sizeDown', label: '縮小' },
+  { action: 'opacityUp', label: '提高不透明度' },
+  { action: 'opacityDown', label: '降低不透明度' }
+] as const;
+const KEY_LABELS: Record<string, string> = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Space: 'Space' };
+const keyLabel = (name: string) => KEY_LABELS[name] || name;
+
+function openSettings() { showSettings.value = true; }
+function closeSettings() {
+  if (rebindingAction.value) window.api.cancelRebind(); // 有未完成的綁定就取消
+  rebindingAction.value = null;
+  showSettings.value = false;
+}
+function rebind(action: string) {
+  rebindingAction.value = action;
+  window.api.startRebind(action as KeyAction);
+}
+// 主程序綁定完成會回推新的 keys → 結束「等待按鍵」狀態
+watch(keys, () => { rebindingAction.value = null; }, { deep: true });
+
+// 除錯模式：開啟前先跳自訂同意彈窗（說明會存什麼、存多久、怎麼清除）
+const showDebugConsent = ref(false);
+function onDebugToggle() {
+  if (debug.value) showDebugConsent.value = true; // 開 → 先問，確認後才送出
+  else window.api.setDebug(false);                // 關 → 直接套用（順帶清空資料）
+}
+function confirmDebug() {
+  showDebugConsent.value = false;
+  window.api.setDebug(true);
+}
+function cancelDebug() {
+  showDebugConsent.value = false;
+  debug.value = false; // 還原開關
+}
+
+// 地圖清單與目前選取（下拉與 imagePath 連動）
 const { currentMapName } = useMaps(imagePath);
 
-// 自動更新(狀態 / 按鈕文字 / 點擊)
+// 自動更新（狀態 / 按鈕文字 / 點擊）
 const { update, isDownloaded, updBtnText, updBtnBusy, onUpdateClick } = useUpdater();
 
 // DBD 前景狀態
@@ -27,7 +68,7 @@ const { focused } = useGameStatus();
 // 視窗高度自動貼合內容
 useAutoFit();
 
-// 應用程式版本(footer 顯示)
+// 應用程式版本（footer 顯示）
 const version = ref('');
 onMounted(async () => { version.value = await window.api.getVersion(); });
 
@@ -35,17 +76,17 @@ onMounted(async () => { version.value = await window.api.getVersion(); });
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
   if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  return { key: 'ok', title: '已就緒', hint: `按 Tab 開啟計分板以自動偵測地圖\n目前地圖：${currentMapName.value}` };
+  return { key: 'ok', title: '已就緒', hint: `進入遊戲後按 Tab 開啟計分板，再按 F 擷取地圖名\n目前地圖：${currentMapName.value}` };
 });
 
 // 視窗控制
 function minimize() { window.api.minimizeControl(); }
 function quit() { window.api.quit(); }
 
-// 地圖 callout 來源,用系統瀏覽器開啟
+// 地圖 callout 來源，用系統瀏覽器開啟
 function openMapSource() { window.api.openExternal('https://hens333.com/callouts/'); }
 
-// 開啟日誌資料夾(回報問題時方便附 log)
+// 開啟日誌資料夾（回報問題時方便附 log)
 function openLogs() { window.api.openLogs(); }
 </script>
 
@@ -57,6 +98,12 @@ function openLogs() { window.api.openLogs(); }
       <span v-if="isDev" class="tb-ver dev-tag">Develop</span>
       <span v-else-if="version" class="tb-ver">v{{ version }}</span>
       <div class="tb-controls">
+        <button class="tb-btn" @click="openSettings" aria-label="設定">
+          <svg viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 13a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
+          </svg>
+        </button>
         <button class="tb-btn" @click="minimize" aria-label="最小化">
           <svg viewBox="0 0 24 24"><path d="M5 12h14" /></svg>
         </button>
@@ -68,12 +115,12 @@ function openLogs() { window.api.openLogs(); }
 
     <div class="app">
     <!-- 啟用 -->
-    <label class="toggle">
+    <div class="toggle">
       <span>啟用</span>
-      <input type="checkbox" v-model="enabled" @change="onEnabled" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="enabled" @change="onEnabled" /><i></i></label>
+    </div>
 
-    <!-- 虛線區塊:遊戲狀態提示 -->
+    <!-- 虛線區塊：遊戲狀態提示 -->
     <section class="dashed" :class="status.key">
       <div class="ic-slot">
         <svg v-if="status.key === 'danger'" class="ic" viewBox="0 0 24 24">
@@ -95,16 +142,16 @@ function openLogs() { window.api.openLogs(); }
 
     <template v-if="enabled">
     <!-- 滑鼠穿透 -->
-    <label class="toggle">
+    <div class="toggle">
       <span>滑鼠穿透</span>
-      <input type="checkbox" v-model="clickThrough" @change="onClickThrough" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="clickThrough" @change="onClickThrough" /><i></i></label>
+    </div>
 
     <!-- 不在前景時隱藏地圖 -->
-    <label class="toggle">
+    <div class="toggle">
       <span>只在遊戲時顯示地圖</span>
-      <input type="checkbox" v-model="hideWhenUnfocused" @change="onHideUnfocused" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="hideWhenUnfocused" @change="onHideUnfocused" /><i></i></label>
+    </div>
 
     <!-- 大小 -->
     <section class="field">
@@ -127,7 +174,7 @@ function openLogs() { window.api.openLogs(); }
     </section>
     </template>
 
-    <!-- 更新:所有狀態(含下載進度、下載完成安裝)整合在同一顆按鈕 -->
+    <!-- 更新：所有狀態（含下載進度、下載完成安裝）整合在同一顆按鈕 -->
     <div class="update">
       <button
         class="upd-btn"
@@ -136,24 +183,67 @@ function openLogs() { window.api.openLogs(); }
         @click="onUpdateClick">{{ updBtnText }}</button>
     </div>
 
-    <!-- 除錯模式:保留檔案日誌與每次截圖,關閉時清空。
-         「開啟資料夾」連結同一行,且不需開啟 toggle 即可點 -->
-    <label class="toggle dim">
+    <!-- 除錯模式：保留檔案日誌與每次截圖，關閉時清空。
+         「開啟資料夾」連結同一行，且不需開啟 toggle 即可點 -->
+    <div class="toggle dim">
       <span>除錯模式 <a href="#" class="link" @click.prevent="openLogs">開啟資料夾</a></span>
-      <input type="checkbox" v-model="debug" @change="onDebug" /><i></i>
-    </label>
+      <label class="sw"><input type="checkbox" v-model="debug" @change="onDebugToggle" /><i></i></label>
+    </div>
 
-    <!-- 作者(左)與地圖 callout 來源(右),版本號移到標題列 -->
+    <!-- 作者（左）與地圖 callout 來源（右），版本號移到標題列 -->
     <footer class="credit">
       <span>Designed by <b>Pocky</b></span>
       <span class="map-credit">Callouts by <a class="link" @click="openMapSource">hens333</a></span>
     </footer>
     </div>
+
+    <!-- 除錯模式同意彈窗（自訂風格）-->
+    <div v-if="showDebugConsent" class="modal-mask" @click.self="cancelDebug">
+      <div class="modal">
+        <div class="modal-title">開啟除錯模式？</div>
+        <div class="modal-body">
+          <p>為了協助排查地圖辨識問題，開啟後會在本機暫存：</p>
+          <ul>
+            <li><b>截圖</b>：每次按 F 擷取時，只截畫面「底部中央」那一條（辨識地圖名用），不含其他畫面內容。</li>
+            <li><b>日誌</b>：程式運作的文字紀錄（OCR 結果、焦點變化等）。</li>
+          </ul>
+          <p class="kv"><span>儲存位置</span>本機 userData\debug，僅存在你的電腦，不會上傳。</p>
+          <p class="kv"><span>保留多久</span>只在除錯開啟期間保留，日誌只留當天。</p>
+          <p class="kv"><span>如何清除</span>關閉除錯會自動清空 logs 與 screenshots。</p>
+        </div>
+        <div class="modal-actions">
+          <button class="m-btn" @click="cancelDebug">取消</button>
+          <button class="m-btn primary" @click="confirmDebug">開啟</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 熱鍵設定彈窗 -->
+    <div v-if="showSettings" class="modal-mask" @click.self="closeSettings">
+      <div class="modal">
+        <div class="modal-title">熱鍵設定</div>
+        <div class="keybinds">
+          <div v-for="b in keyActions" :key="b.action" class="kb-row">
+            <span class="kb-label">{{ b.label }}</span>
+            <button
+              class="kb-key"
+              :class="{ listening: rebindingAction === b.action }"
+              @click="rebind(b.action)">
+              {{ rebindingAction === b.action ? '按下新的鍵…' : keyLabel(keys[b.action]) }}
+            </button>
+          </div>
+        </div>
+        <p class="kb-hint">點按鍵後按下想要的鍵即可重新綁定，Esc 取消。</p>
+        <div class="modal-actions">
+          <button class="m-btn primary" @click="closeSettings">完成</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <style>
-/* 子集化的 Noto Sans TC(可變字重,只含介面+地圖名用到的字)*/
+/* 子集化的 Noto Sans TC（可變字重，只含介面+地圖名用到的字）*/
 @font-face {
   font-family: 'Noto Sans TC';
   src: url('../assets/notosanstc-subset.woff2') format('woff2-variations');
@@ -161,8 +251,8 @@ function openLogs() { window.api.openLogs(); }
   font-display: swap;
 }
 
-/* 只把數字(0-9)指到乾淨的系統 Latin 字:子集化的 Noto Sans TC 沒收數字,
-   會 fallback 到 JhengHei(「1」帶襯線)。放在字型堆疊最前面只影響數字字符。 */
+/* 只把數字（0-9）指到乾淨的系統 Latin 字：子集化的 Noto Sans TC 沒收數字，
+   會 fallback 到 JhengHei（「1」帶襯線）。放在字型堆疊最前面只影響數字字符。 */
 @font-face {
   font-family: 'CleanDigits';
   src: local('Segoe UI'), local('Arial');
@@ -201,7 +291,7 @@ body {
   letter-spacing: 2px;
   color: var(--muted);
 }
-/* 版本號:樣式同標題,只多一個與標題的間距 */
+/* 版本號：樣式同標題，只多一個與標題的間距 */
 .tb-ver {
   margin-left: 8px;
   font-size: 11px;
@@ -236,7 +326,7 @@ body {
 
 /* ===== 虛線狀態區塊 ===== */
 .dashed {
-  --c: 160, 160, 170;        /* 狀態色 RGB,由 .danger/.warn/.ok 覆寫 */
+  --c: 160, 160, 170;        /* 狀態色 RGB，由 .danger/.warn/.ok 覆寫 */
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -255,7 +345,7 @@ body {
 .dashed.warn   { --c: 230, 181, 63; }  /* 黃 */
 .dashed.ok     { --c: 70, 214, 160; }  /* 綠 */
 
-/* 圖示固定槽位,讓三種狀態的圖示對齊一致 */
+/* 圖示固定槽位，讓三種狀態的圖示對齊一致 */
 .ic-slot {
   height: 24px;
   display: flex;
@@ -281,7 +371,7 @@ body {
 }
 .dashed .ic-pause { fill: rgb(var(--c)); stroke: none; }
 
-/* 未啟用:兩個大小遞增、角度各異的 z(睡覺 Zzz) */
+/* 未啟用：兩個大小遞增、角度各異的 z（睡覺 Zzz) */
 .dashed .ic-zzz {
   fill: none;
   stroke-width: 2.2;
@@ -301,7 +391,7 @@ body {
   color: var(--muted);
   white-space: pre-line;
   line-height: 1.65;
-  min-height: 3.3em;   /* 預留兩行高度,讓三種狀態版面一致 */
+  min-height: 3.3em;   /* 預留兩行高度，讓三種狀態版面一致 */
 }
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(var(--c), 0.55); }
@@ -325,7 +415,7 @@ body {
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  /* 立體底邊用陰影,不動到內容區,保持箭頭精準置中 */
+  /* 立體底邊用陰影，不動到內容區，保持箭頭精準置中 */
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
 }
 .keys svg {
@@ -368,8 +458,9 @@ body {
   font-size: 12.5px;        /* 與 .cap 一致 */
   color: var(--muted);
   letter-spacing: 0.5px;
-  cursor: pointer;
 }
+/* 只有開關本體可點切換（整條不再觸發）*/
+.toggle .sw { display: inline-flex; align-items: center; cursor: pointer; }
 .toggle input { display: none; }
 .toggle i {
   width: 38px; height: 20px;
@@ -424,11 +515,11 @@ body {
 .upd-btn:disabled { opacity: 0.5; cursor: default; }
 .upd-btn.ready { background: #46d6a0; border-color: #46d6a0; color: #0d2a1f; font-weight: 700; }
 .upd-btn.ready:hover { background: #54e2ad; }
-/* 狀態文字直接顯示在按鈕內,錯誤用琥珀色提示 */
+/* 狀態文字直接顯示在按鈕內，錯誤用琥珀色提示 */
 .upd-btn.error { color: #e0a23c; }
 .upd-btn.dev { color: var(--muted); }
 
-/* 除錯開關:診斷用,視覺低調些 */
+/* 除錯開關：診斷用，視覺低調些 */
 .toggle.dim { opacity: 0.8; }
 /* 同一行的「開啟資料夾」連結 */
 .toggle .link {
@@ -440,18 +531,18 @@ body {
 }
 .toggle .link:hover { color: var(--text); text-decoration: underline; }
 
-/* ===== 作者署名(左)/ 地圖來源(右) ===== */
+/* ===== 作者署名（左）/ 地圖來源（右） ===== */
 .credit {
   margin-top: 2px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   font-size: 10.5px;
-  letter-spacing: 0.5px;   /* 兩側共用同一字距,避免不一致 */
+  letter-spacing: 0.5px;   /* 兩側共用同一字距，避免不一致 */
   color: #5c5d68;
 }
 .credit b { font-weight: 700; color: #9a9ba6; }
-/* 地圖來源連結(字距 / 字級 / 顏色都繼承 .credit,只額外加連結樣式) */
+/* 地圖來源連結（字距 / 字級 / 顏色都繼承 .credit，只額外加連結樣式） */
 .map-credit .link {
   color: #9a9ba6;
   font-weight: 700;
@@ -459,4 +550,77 @@ body {
   text-decoration: none;
 }
 .map-credit .link:hover { color: var(--text); text-decoration: underline; }
+
+/* ===== 除錯同意彈窗 ===== */
+.modal-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  z-index: 100;
+  -webkit-app-region: no-drag;
+}
+.modal {
+  width: 100%;
+  max-height: 92vh;
+  overflow-y: auto;
+  background: #16171f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 18px;
+  font-family: var(--ui);
+  color: var(--text);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.modal-title { font-size: 14px; font-weight: 800; letter-spacing: 0.5px; margin-bottom: 10px; }
+.modal-body { font-size: 11.5px; color: #b6b7c2; line-height: 1.7; }
+.modal-body p { margin: 0 0 8px; }
+.modal-body ul { margin: 0 0 8px; padding-left: 16px; }
+.modal-body li { margin-bottom: 4px; }
+.modal-body b { color: var(--text); font-weight: 700; }
+.modal-body .kv span {
+  display: inline-block;
+  min-width: 4.8em;
+  color: #8a8b98;
+}
+.modal-actions { display: flex; gap: 8px; margin-top: 14px; }
+.m-btn {
+  flex: 1;
+  padding: 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.m-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.m-btn.primary { background: #46d6a0; border-color: #46d6a0; color: #0d2a1f; font-weight: 700; }
+.m-btn.primary:hover { background: #54e2ad; }
+
+/* ===== 熱鍵設定 ===== */
+.keybinds { display: flex; flex-direction: column; gap: 8px; }
+.kb-row { display: flex; align-items: center; justify-content: space-between; }
+.kb-label { font-size: 12px; color: #b6b7c2; }
+.kb-key {
+  min-width: 78px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-family: var(--ui);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.15s;
+}
+.kb-key:hover { background: rgba(255, 255, 255, 0.12); }
+.kb-key.listening { border-color: #46d6a0; color: #46d6a0; background: rgba(70, 214, 160, 0.08); }
+.kb-hint { font-size: 10.5px; color: #6c6d78; margin: 10px 0 0; text-align: center; line-height: 1.5; }
 </style>
