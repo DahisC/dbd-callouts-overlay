@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import { useSettings } from '../composables/useSettings';
-import { useMaps } from '../composables/useMaps';
 import { useUpdater } from '../composables/useUpdater';
 import { useGameStatus } from '../composables/useGameStatus';
 import { useAutoFit } from '../composables/useAutoFit';
@@ -10,7 +9,7 @@ const isDev = import.meta.env.DEV;  // 開發模式（打包後為 false)
 
 // 外觀 / 行為設定（啟用、透明度、大小、滑鼠穿透、只在遊戲時顯示）
 const {
-  enabled, imagePath, opacity, scale, clickThrough, hideWhenUnfocused, debug, keys,
+  enabled, opacity, scale, clickThrough, hideWhenUnfocused, debug, keys,
   opacityFill, scaleFill,
   onEnabled, onOpacity, onScale, onClickThrough, onHideUnfocused
 } = useSettings();
@@ -56,14 +55,12 @@ function cancelDebug() {
   debug.value = false; // 還原開關
 }
 
-// 地圖清單與目前選取（下拉與 imagePath 連動）
-const { currentMapName } = useMaps(imagePath);
 
 // 自動更新（狀態 / 按鈕文字 / 點擊）
 const { update, isDownloaded, updBtnText, updBtnBusy, onUpdateClick } = useUpdater();
 
-// DBD 前景狀態
-const { focused } = useGameStatus();
+// DBD 狀態:focused 供截圖/隱藏(主程序用),running 供狀態燈持續顯示
+const { running } = useGameStatus();
 
 // 視窗高度自動貼合內容
 useAutoFit();
@@ -75,8 +72,8 @@ onMounted(async () => { version.value = await window.api.getVersion(); });
 // 依啟用 / 前景狀態給對應的顏色 / 標題 / 提示
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
-  if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  return { key: 'ok', title: '已就緒', hint: `進入遊戲後按 Tab 開啟計分板，再按 F 擷取地圖名\n目前地圖：${currentMapName.value}` };
+  if (!running.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
+  return { key: 'ok', title: '已偵測到遊戲' }; // hint 由模板渲染(含鍵帽,擷取鍵依設定)
 });
 
 // 視窗控制
@@ -137,7 +134,10 @@ function openLogs() { window.api.openLogs(); }
         <span v-else class="dot"></span>
       </div>
       <div class="dz-title">{{ status.title }}</div>
-      <div class="dz-hint">{{ status.hint }}</div>
+      <div class="dz-hint">
+        <template v-if="status.key === 'ok'">在遊戲中按 <kbd class="kc">Tab</kbd> 保持計分板開啟，並按 <kbd class="kc">{{ keyLabel(keys.capture) }}</kbd> 就會自動載入地圖<br>辨識偶爾可能有誤，若地圖不對再按一次即可重試</template>
+        <template v-else>{{ status.hint }}</template>
+      </div>
     </section>
 
     <template v-if="enabled">
@@ -392,6 +392,26 @@ body {
   white-space: pre-line;
   line-height: 1.65;
   min-height: 3.3em;   /* 預留兩行高度，讓三種狀態版面一致 */
+}
+/* 提示文字內的鍵帽（Tab／擷取鍵），沿用拉桿鍵帽的視覺 */
+.dz-hint .kc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 17px;
+  padding: 0 5px;
+  margin: 0 2px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  color: #c2c3cd;
+  font-family: var(--ui);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: middle;
 }
 @keyframes pulse {
   0% { box-shadow: 0 0 0 0 rgba(var(--c), 0.55); }
