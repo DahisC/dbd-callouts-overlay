@@ -488,20 +488,20 @@ $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
       { windowsHide: true, maxBuffer: 64 * 1024 * 1024 },
       (err, stdout) => {
         if (err) return reject(err);
-        const buf = Buffer.from(String(stdout).trim(), 'base64');
         console.log(`[capture] region ${w}x${h} @(${x},${y})`);
-        // debug 模式:把這次截到的矩形存檔,方便檢查 / 校正 NAME_REGION
-        if (settings.debug) {
-          try {
-            const n = new Date();
-            const stamp = `${today}_${_pad(n.getHours())}-${_pad(n.getMinutes())}-${_pad(n.getSeconds())}-${n.getMilliseconds()}`;
-            writeFileSync(join(screenshotsDir(), `${stamp}.png`), buf);
-          } catch { /* ignore */ }
-        }
-        resolve(buf);
+        resolve(Buffer.from(String(stdout).trim(), 'base64'));
       }
     );
   });
+}
+
+// debug 模式:把「OCR 實際處理後的圖」存進 screenshots(所見即 OCR 所見;灰階高對比也較小)
+function saveDebugShot(png: Buffer) {
+  try {
+    const n = new Date();
+    const stamp = `${today}_${_pad(n.getHours())}-${_pad(n.getMinutes())}-${_pad(n.getSeconds())}-${n.getMilliseconds()}`;
+    writeFileSync(join(screenshotsDir(), `${stamp}.png`), png);
+  } catch { /* ignore */ }
 }
 
 async function onTabPressed() {
@@ -517,7 +517,8 @@ async function onTabPressed() {
     console.log(`[tab] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms`);
     await delay(CAPTURE_DELAY);
     const regionPng = await captureNameRegion();
-    const text = await recognizeMapName(regionPng);
+    const { text, image } = await recognizeMapName(regionPng);
+    if (settings.debug) saveDebugShot(image); // 存 OCR 實際看到的那張
     const best = matchMap(text, getMaps());
     const switched = !!(best && best.score >= MATCH_THRESHOLD);
 

@@ -54,15 +54,19 @@ function enhanceContrast(img: Electron.NativeImage): Electron.NativeImage {
   return nativeImage.createFromBitmap(out, { width, height });
 }
 
-// 對「已裁切好的地圖名區域 PNG」做 OCR:放大 2 倍 + 灰階對比拉伸後辨識
-export async function recognizeMapName(regionPng: Buffer): Promise<string> {
+// 對「已裁切好的地圖名區域 PNG」做 OCR:灰階對比拉伸 → 放大 2 倍 → 辨識。
+// 回傳辨識文字,以及「處理後(灰階+對比)的 PNG」供 debug 存檔:
+// 這張就是 OCR 看到的內容(只差沒放大,放大只是讓 tesseract 好認、不增資訊),
+// 灰階高對比也比原始彩色截圖小很多。
+export async function recognizeMapName(regionPng: Buffer): Promise<{ text: string; image: Buffer }> {
   let img = nativeImage.createFromBuffer(regionPng);
+  img = enhanceContrast(img);
+  const image = img.toPNG();
   const { width } = img.getSize();
   if (width > 0) img = img.resize({ width: width * 2 });
-  img = enhanceContrast(img);
   const worker = await getWorker();
   const { data } = await worker.recognize(img.toPNG());
-  return data.text || '';
+  return { text: data.text || '', image };
 }
 
 // 比對邏輯已移到 ./match(純函式,便於測試);此處 re-export 維持既有 import 路徑
