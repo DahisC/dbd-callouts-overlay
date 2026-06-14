@@ -74,7 +74,7 @@ const DEFAULT_SETTINGS = {
   x: 0,               // overlay 左上角位置
   y: 0,
   clickThrough: false,   // 滑鼠是否穿透 overlay
-  onlyWhenDbdFocused: true, // Tab 偵測只在 DBD 為最前景視窗時才觸發
+  onlyWhenDbdFocused: true, // F 偵測只在 DBD 為最前景視窗時才觸發
   hideWhenUnfocused: true, // DBD 不在最前景時自動隱藏地圖
   debug: false             // debug 模式:保留檔案日誌與每次截圖
 };
@@ -100,7 +100,7 @@ function saveSettings() {
   }
 }
 
-// 地圖清單快取:避免每次按 Tab 都同步重掃磁碟。
+// 地圖清單快取:避免每次按 F 都同步重掃磁碟。
 // 使用者開控制台時(list-maps)才強制重掃,以撿到新放入的地圖。
 let mapsCache: MapItem[] | null = null;
 function getMaps(forceRefresh = false) {
@@ -381,11 +381,11 @@ ipcMain.on('select-map', (_e, path) => {
 
 // ---- App 生命週期 ----
 
-// ===== 用 uiohook 監聽 Tab(只聽不攔,遊戲照樣收到 Tab) =====
-const CAPTURE_DELAY = 350;  // 按 Tab 後等記分板動畫跑完再截
+// ===== 用 uiohook 監聽 F 鍵(只聽不攔,遊戲照樣收到 F) =====
+const CAPTURE_DELAY = 350;  // 按 F 後等記分板動畫跑完再截
 let capturing = false;
-let tabCount = 0;
-let tabHeld = false;   // Tab 是否正被按住(用來忽略自動重複)
+let captureCount = 0;
+let keyHeld = false;   // 觸發鍵(F)是否正被按住(用來忽略自動重複)
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -505,17 +505,17 @@ function saveDebugShot(png: Buffer) {
   } catch { /* ignore */ }
 }
 
-async function onTabPressed() {
+async function onCaptureKey() {
   if (capturing) return;       // 防止連按/長按重複觸發
   if (!settings.enabled) return; // 停用時不偵測 / 不切換
   capturing = true;
   try {
-    tabCount++;
+    captureCount++;
     if (settings.onlyWhenDbdFocused && !isDbdForeground()) {
-      console.log(`[tab] #${tabCount} skipped: DBD not in foreground`);
+      console.log(`[key] F #${captureCount} skipped: DBD not in foreground`);
       return;
     }
-    console.log(`[tab] detected (#${tabCount}), capturing in ${CAPTURE_DELAY}ms`);
+    console.log(`[key] F detected (#${captureCount}), capturing in ${CAPTURE_DELAY}ms`);
     await delay(CAPTURE_DELAY);
     const regionPng = await captureNameRegion();
     const { text, image } = await recognizeMapName(regionPng);
@@ -584,27 +584,27 @@ async function onArrowKey(keycode) {
   else if (keycode === UiohookKey.ArrowRight) action = () => adjustOpacity(+STEP_OPACITY);
   else if (keycode === UiohookKey.ArrowLeft) action = () => adjustOpacity(-STEP_OPACITY);
   if (!action) return;
-  // 跟 Tab 一樣:只在 DBD 為前景時生效(桌面操作不受干擾)
+  // 跟截圖鍵一樣:只在 DBD 為前景時生效(桌面操作不受干擾)
   if (settings.onlyWhenDbdFocused && !isDbdForeground()) return;
   action();
 }
 
 function startKeyHook() {
   uIOhook.on('keydown', (e) => {
-    if (e.keycode === UiohookKey.Tab) {
-      if (tabHeld) return;   // 按住期間的重複 keydown,略過
-      tabHeld = true;
-      onTabPressed();
+    if (e.keycode === UiohookKey.F) {
+      if (keyHeld) return;   // 按住期間的重複 keydown,略過
+      keyHeld = true;
+      onCaptureKey();
       return;
     }
     onArrowKey(e.keycode);   // 方向鍵微調(按住會持續調整)
   });
   uIOhook.on('keyup', (e) => {
-    if (e.keycode === UiohookKey.Tab) tabHeld = false;
+    if (e.keycode === UiohookKey.F) keyHeld = false;
   });
   try {
     uIOhook.start();
-    console.log('[hook] uiohook started, listening for Tab (non-blocking)');
+    console.log('[hook] uiohook started, listening for F (non-blocking)');
   } catch (err) {
     console.error('[hook] uiohook failed to start:', err);
   }

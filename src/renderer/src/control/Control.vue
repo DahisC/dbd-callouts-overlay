@@ -50,7 +50,7 @@ onMounted(async () => { version.value = await window.api.getVersion(); });
 const status = computed(() => {
   if (!enabled.value) return { key: 'off', title: '未啟用', hint: '地圖已關閉\n點選「啟用」以查看地圖' };
   if (!focused.value) return { key: 'danger', title: '未偵測到遊戲', hint: '應用程式會自動偵測遊戲視窗\n請開啟遊戲' };
-  return { key: 'ok', title: '已就緒', hint: `進入遊戲後按下 Tab 開啟計分板，直到地圖載入\n目前地圖：${currentMapName.value}` };
+  return { key: 'ok', title: '已就緒', hint: `進入遊戲後按 Tab 開啟計分板，再按 F 擷取地圖名\n目前地圖：${currentMapName.value}` };
 });
 
 // 視窗控制
@@ -172,7 +172,7 @@ function openLogs() { window.api.openLogs(); }
         <div class="modal-body">
           <p>為了協助排查地圖辨識問題，開啟後會在本機暫存：</p>
           <ul>
-            <li><b>截圖</b>：每次按 Tab 時，只截畫面「底部中央」那一條（辨識地圖名用），不含其他畫面內容。</li>
+            <li><b>截圖</b>：每次按 F 擷取時，只截畫面「底部中央」那一條（辨識地圖名用），不含其他畫面內容。</li>
             <li><b>日誌</b>：程式運作的文字紀錄（OCR 結果、焦點變化等）。</li>
           </ul>
           <p class="kv"><span>儲存位置</span>本機 userData\debug，僅存在你的電腦，不會上傳。</p>
