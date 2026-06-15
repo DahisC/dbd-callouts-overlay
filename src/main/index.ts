@@ -288,9 +288,10 @@ function createControlWindow() {
 }
 
 // 擷取回饋:通知 overlay。'capturing' 顯示遮罩+轉圈圈;'success'/'fail' 閃綠/紅邊框
-function showCaptureStatus(state) {
+// success 另帶辨識到的地圖名,讓 overlay 在中央短暫顯示
+function showCaptureStatus(state, name?, key?) {
   if (overlayWin && !overlayWin.isDestroyed()) {
-    overlayWin.webContents.send('capture-status', state);
+    overlayWin.webContents.send('capture-status', { state, name, key });
   }
 }
 
@@ -575,13 +576,18 @@ async function onCaptureKey() {
       saveSettings();
       pushImage();        // overlay 自動切換
       notifyControl();    // 控制台下拉同步
-      showCaptureStatus('success'); // 收起遮罩、閃綠邊框
+      showCaptureStatus('success', best.map.name); // 收起遮罩、閃綠邊框,並在中央顯示地圖名
     } else {
-      showCaptureStatus('fail');     // 收起遮罩、閃紅邊框
+      // 辨識失敗就取消地圖顯示,避免留著上一張(可能已不是當前地圖)誤導
+      settings.imagePath = '';
+      saveSettings();
+      pushImage();        // 送空圖 → overlay 回到「地圖未載入」
+      notifyControl();    // 控制台同步
+      showCaptureStatus('fail', undefined, settings.keys.capture); // 收起遮罩、閃紅邊框,帶擷取鍵供提示文字用
     }
   } catch (e) {
     console.error('[ocr] recognition failed:', e);
-    showCaptureStatus('fail');
+    showCaptureStatus('fail', undefined, settings.keys.capture);
   } finally {
     capturing = false;
   }
