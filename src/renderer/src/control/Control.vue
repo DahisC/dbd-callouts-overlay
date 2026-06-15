@@ -141,9 +141,9 @@ function openLogs() { window.api.openLogs(); }
     </section>
 
     <template v-if="enabled">
-    <!-- 滑鼠穿透 -->
+    <!-- 鎖定地圖（滑鼠穿透）-->
     <div class="toggle">
-      <span>滑鼠穿透</span>
+      <span>鎖定地圖</span>
       <label class="sw"><input type="checkbox" v-model="clickThrough" @change="onClickThrough" /><i></i></label>
     </div>
 

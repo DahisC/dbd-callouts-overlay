@@ -18,16 +18,30 @@ const { hud, hudShow } = useHud();
 // 自訂拖曳(回傳的 onMouseDown 綁在容器上)
 const { onMouseDown } = useOverlayDrag();
 
-// 擷取回饋:擷取中 → 變暗+轉圈圈;成功/失敗 → 閃綠/紅邊框
+// 擷取回饋:擷取中 → 變暗+轉圈圈;成功/失敗 → 閃綠/紅邊框;成功另在中央顯示地圖名 3 秒
 const capturing = ref(false);
 const flash = ref(''); // '' | 'ok' | 'fail'
+const mapName = ref(''); // 成功時短暫顯示的地圖名
+const failMsg = ref(''); // 失敗時短暫顯示的提示
 let flashTimer: ReturnType<typeof setTimeout> | null = null;
-window.api.onCaptureStatus((state) => {
+let nameTimer: ReturnType<typeof setTimeout> | null = null;
+let failTimer: ReturnType<typeof setTimeout> | null = null;
+window.api.onCaptureStatus(({ state, name, key }) => {
   capturing.value = state === 'capturing';
   if (state === 'success' || state === 'fail') {
     flash.value = state === 'success' ? 'ok' : 'fail';
     if (flashTimer) clearTimeout(flashTimer);
     flashTimer = setTimeout(() => { flash.value = ''; }, 1000);
+  }
+  if (state === 'success' && name) {
+    mapName.value = name;
+    if (nameTimer) clearTimeout(nameTimer);
+    nameTimer = setTimeout(() => { mapName.value = ''; }, 3000);
+  }
+  if (state === 'fail') {
+    failMsg.value = `請在開啟計分板的情況下按下擷取鍵${key || ''}`;
+    if (failTimer) clearTimeout(failTimer);
+    failTimer = setTimeout(() => { failMsg.value = ''; }, 3000);
   }
 });
 </script>
@@ -41,6 +55,10 @@ window.api.onCaptureStatus((state) => {
     <div v-if="capturing" class="cap-mask"><div class="spinner"></div></div>
     <!-- 結果:閃綠/紅邊框 -->
     <div v-if="flash" class="flash" :class="flash"></div>
+    <!-- 辨識成功:中央短暫顯示地圖名 -->
+    <div v-if="mapName" class="map-name">{{ mapName }}</div>
+    <!-- 辨識失敗:中央短暫顯示提示 -->
+    <div v-if="failMsg" class="map-name fail-msg">{{ failMsg }}</div>
   </div>
 </template>
 
@@ -129,6 +147,37 @@ img {
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* 辨識成功:地圖名置中浮現,3 秒內淡入 → 停留 → 淡出 */
+.map-name {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: max-content;
+  max-width: 90%;
+  padding: 6px 14px;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-family: "Microsoft JhengHei", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.35;
+  box-sizing: border-box;
+  pointer-events: none;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.6);
+  animation: name-pop 3s ease-out forwards;
+}
+@keyframes name-pop {
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+  8%   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  82%  { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
 }
 
 /* 結果邊框閃爍:成功綠、失敗紅 */

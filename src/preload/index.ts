@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // --- overlay 用 ---
   onSetImage: (cb) => ipcRenderer.on('set-image', (_e, path) => cb(path)),
-  onCaptureStatus: (cb) => ipcRenderer.on('capture-status', (_e, state) => cb(state)),
+  onCaptureStatus: (cb) => ipcRenderer.on('capture-status', (_e, payload) => cb(payload)),
   onShowHud: (cb) => ipcRenderer.on('show-hud', (_e, text) => cb(text)),
   reportImageSize: (size) => ipcRenderer.send('image-natural-size', size),
   dragStart: () => ipcRenderer.send('drag-start'),
